@@ -1,0 +1,298 @@
+<?xml version="1.0" encoding="UTF-8" standalone="yes" ?>
+<CodeBlocks_project_file>
+	<FileVersion major="1" minor="6" />
+	<Project>
+		<Option title="InvertedPendulumVisualControl" />
+		<Option pch_mode="2" />
+		<Option compiler="gcc" />
+		<Option virtualFolders="main/;NLControllerOptimization/;Arduino/;Utils/;EstimationAndControl/;EstimationAndControl/Control/;EstimationAndControl/EKF/;Webcam/;Visualization/;" />
+		<Build>
+			<Target title="Debug">
+				<Option output="build/InvertedPendulumVisualControl" prefix_auto="1" extension_auto="1" />
+				<Option object_output="build/obj/Debug/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-std=c++11" />
+					<Add option="-g" />
+					<Add directory="../JPhysics/Headers" />
+					<Add directory="../JPhysics/Headers/JPhysics" />
+					<Add directory="Source" />
+				</Compiler>
+				<Linker>
+					<Add library="../JPhysics/build/Debug_Linux64/libJPhysics.a" />
+					<Add library="GLEW" />
+					<Add library="GL" />
+					<Add library="GLU" />
+					<Add library="rt" />
+					<Add library="X11" />
+					<Add library="sfml-system" />
+					<Add library="sfml-graphics" />
+					<Add library="sfml-window" />
+					<Add library="sfml-network" />
+					<Add library="opencv_highgui" />
+					<Add library="opencv_core" />
+					<Add library="opencv_imgproc" />
+					<Add library="m" />
+					<Add library="nlopt" />
+				</Linker>
+			</Target>
+			<Target title="Release">
+				<Option output="bin/InvertedPendulumVisualControl" prefix_auto="1" extension_auto="1" />
+				<Option object_output="obj/Release/" />
+				<Option type="1" />
+				<Option compiler="gcc" />
+				<Compiler>
+					<Add option="-O2" />
+				</Compiler>
+				<Linker>
+					<Add option="-s" />
+				</Linker>
+			</Target>
+		</Build>
+		<Compiler>
+			<Add option="-Wall" />
+		</Compiler>
+		<Unit filename="Source/Arduino/ArduinoCommsInterface.cpp">
+			<Option virtualFolder="Arduino/" />
+		</Unit>
+		<Unit filename="Source/Arduino/ArduinoCommsInterface.h">
+			<Option virtualFolder="Arduino/" />
+		</Unit>
+		<Unit filename="Source/Arduino/ArduinoSerial.cpp">
+			<Option virtualFolder="Arduino/" />
+		</Unit>
+		<Unit filename="Source/Arduino/ArduinoSerial.h">
+			<Option virtualFolder="Arduino/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/CV_PendCart_Measurer.cpp">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/CV_PendCart_Measurer.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/CalculateSystemEnergy.cpp">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/CalculateSystemEnergy.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_LQR.cpp">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_LQR.h">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_NonlinearSwingup.cpp">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_NonlinearSwingup.h">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_Position.cpp">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_Position.h">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_SavedHumanReplay.cpp">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/Control/Controller_SavedHumanReplay.h">
+			<Option virtualFolder="EstimationAndControl/Control/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/ControllerGeneric.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/EKF/DCMotor_PendCart_EKF.cpp">
+			<Option virtualFolder="EstimationAndControl/EKF/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/EKF/DCMotor_PendCart_EKF.h">
+			<Option virtualFolder="EstimationAndControl/EKF/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/PendCart_State_CVMat_defines.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/PendulumCart_Constants.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/StateAndMeasurementClasses.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/SynchedKF.cpp">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/EstimationAndControl/SynchedKF.h">
+			<Option virtualFolder="EstimationAndControl/" />
+		</Unit>
+		<Unit filename="Source/FullDemo_Arduino_EKF_CV_Control.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/FullDemo_Arduino_EKF_CV_Control.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/GameSystemBase.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/GameSystemBase.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/InitSimulations.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/InitSimulations.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/InteractiveNonconvexOptimization.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/InteractiveNonconvexOptimization.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/4DStateSpace.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/BestNLOptScoreSoFar.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/EnableKeyPressToStopOptimization.cpp">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/EnableKeyPressToStopOptimization.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/OptimizedNonlinearController.cpp">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/OptimizedNonlinearController.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/RunNLOptimization.cpp">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/RunNLOptimization.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/RunSimulation.cpp">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/RunSimulation.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/TrainControllerFromHumanData.cpp">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/TrainControllerFromHumanData.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/nlopt_scoring_and_data.cpp">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/NLControllerOptimization/nlopt_scoring_and_data.h">
+			<Option virtualFolder="NLControllerOptimization/" />
+		</Unit>
+		<Unit filename="Source/PrinterPhys124_PendCart_Params.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/PrinterPhys124_PendCart_Params.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/SFML_Inputs.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/SimplerGameSimSystem.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/TryIncludeJPhysics.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/Utils/CaseInsensitiveSearch.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/MathUtils.cpp">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/MathUtils.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/MultiPlatformSleep.cpp">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/MultiPlatformSleep.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/OS_FolderBrowser_tinydir.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/SUtils.cpp">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/SUtils.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/SharedUtils_RNG.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/random_normal_dist_using_c.cpp">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/random_normal_dist_using_c.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/targetplatform.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Visualization/DrawPlane.cpp">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Visualization/DrawPlane.h">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Visualization/GlutFontRender.cpp">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Visualization/GlutFontRender.h">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Visualization/IncludeGameEngine.h">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Visualization/TryIncludeGLEW.h">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Visualization/WindowProjectionInfo.h">
+			<Option virtualFolder="Visualization/" />
+		</Unit>
+		<Unit filename="Source/Webcam/ColoredPendOrientationFinder.cpp">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/ColoredPendOrientationFinder.h">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/RealtimeVideoProcessor.cpp">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/RealtimeVideoProcessor.h">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/Webcam.cpp">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/Webcam.h">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/main.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/main.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/stdafx.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Extensions>
+			<code_completion />
+			<debugger />
+		</Extensions>
+	</Project>
+</CodeBlocks_project_file>
