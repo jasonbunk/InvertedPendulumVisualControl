@@ -303,8 +303,8 @@ void ColoredPendOrientationFinder::CalibratePendulumFinder()
 				calibration_running_total_angle += pendtheta;
 				calibration_num_angles_saved_hanging += 1.0;
 				
-				angle_when_vertical = physmath::PI + (calibration_running_total_angle / calibration_num_angles_saved_hanging);
-				cout<<"hanging angle: "<<angle_when_vertical<<endl;
+				angle_when_vertical = (calibration_running_total_angle / calibration_num_angles_saved_hanging);
+				cout<<"angle when inverted (vertical): "<<angle_when_vertical<<endl;
 			}
 			
 			cout<<"measurements: cartx: "<<ConvertCartXFromPixelCoords(cartx)<<", theta: "<<ConvertThetaFromPixelCoords(pendtheta)<<endl;
@@ -314,7 +314,7 @@ void ColoredPendOrientationFinder::CalibratePendulumFinder()
 	}
 	cv::destroyAllWindows();
 	
-	angle_when_vertical = physmath::PI + (calibration_running_total_angle / calibration_num_angles_saved_hanging);
+	angle_when_vertical = (calibration_running_total_angle / calibration_num_angles_saved_hanging);
 }
 
 
