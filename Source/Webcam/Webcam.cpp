@@ -3,97 +3,116 @@
  *
  * Author: Jason Bunk
  * Web page: http://sites.google.com/site/jasonbunk
- * License: Apache License Version 2.0, January 2004
+ * 
  * Copyright (c) 2015 Jason Bunk
- */
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 #include "Webcam.h"
 #include "../Utils/SUtils.h"
 #include "../Utils/MultiPlatformSleep.h"
+using std::cout; using std::endl;
 
-void WebcamCV::InitWindow(bool showstuff)
+
+void WebcamCV::InitWindow()
 {
-    winNameStr = std::string("camera ")+to_istring(this_webcam_number);
-	getCameraVals(showstuff);
+	initCameraParams();
 	
     if(img_width_received > 0 && img_height_received > 0)
-    {
-		if(showstuff)
-		{
-			cv::namedWindow(winNameStr, cv::WINDOW_AUTOSIZE);
-			std::cout<<"webcam "<<this_webcam_number<<" img size: ("<<img_width_received<<", "<<img_height_received<<")"<<std::endl;
-			/*cv::createTrackbar("Brightness", winNameStr, &brightness_slider, 255);
-			cv::createTrackbar("Contrast", winNameStr, &contrast_slider, 255);
-			cv::createTrackbar("Gain", winNameStr, &gain_slider, 255);
-			cv::createTrackbar("Saturation", winNameStr, &saturation_slider, 255);*/
-			cv::createTrackbar("Exposure+20", winNameStr, &exposure_slider, 40);
-		}
-    } else {
+    {} else {
         std::cout<<"ERROR: WEBCAM "<<to_istring(this_webcam_number)<<" UNABLE TO BE INITIALIZED"<<std::endl;
     }
 }
 
-void WebcamCV::UpdateWindow(bool showstuff)
+void WebcamCV::UpdateWindowMainThread()
 {
     if(img_width_received > 0 && img_height_received > 0)
     {
-		//uncommenting this will make things much faster
-        setCameraVals();
-
         the_webcam >> last_received_image;
         
         if(last_received_image.rows > 0 && last_received_image.cols > 0) {
-			if(showstuff) {
-				cv::imshow(winNameStr, last_received_image);
-			}
         } else {
             std::cout<<"warning: empty image from webcam "<<to_istring(this_webcam_number)<<"!"<<std::endl;
         }
     }
 }
 
-void WebcamCV::setCameraVals()
+
+cv::Mat WebcamCV::GetLastReceivedImageMainThread()
 {
-	return;
-	/*the_webcam.set(CV_CAP_PROP_BRIGHTNESS, brightness_slider);
-	the_webcam.set(CV_CAP_PROP_CONTRAST, contrast_slider);
-	the_webcam.set(CV_CAP_PROP_GAIN, gain_slider);
-	the_webcam.set(CV_CAP_PROP_SATURATION, saturation_slider);*/
-	std::cout<<"setting webcam "<<this_webcam_number<<" exposure to: "<<(exposure_slider-20)<<std::endl;
-	the_webcam.set(CV_CAP_PROP_EXPOSURE, (exposure_slider-20));
+	cv::Mat retval;
+	image_mutex.lock();
+	last_received_image.copyTo(retval);
+	image_mutex.unlock();
+	return retval;
 }
 
-void WebcamCV::getCameraVals(bool showingstuff)
+cv::Mat* WebcamCV::CheckForNewImageFromThread()
+{
+	cv::Mat* retval = nullptr;
+	
+	image_mutex.lock();
+	if(haveGrabbedThisImage == false) {
+		retval = new cv::Mat();
+		last_received_image.copyTo(*retval);
+		haveGrabbedThisImage = true;
+	}
+	image_mutex.unlock();
+	
+	return retval;
+}
+
+void WebcamCV::UpdateWindowCamerasThread()
+{
+	cv::Mat grabbedImage;
+	while(true)
+	{
+		the_webcam >> grabbedImage;
+		image_mutex.lock();
+		haveGrabbedThisImage = false;
+		grabbedImage.copyTo(last_received_image);
+		image_mutex.unlock();
+	}
+}
+
+void WebcamCV::StartAutoGrabImagesThread()
+{
+	if(grabbing_images_thread == nullptr) {
+		grabbing_images_thread = new std::thread(&WebcamCV::UpdateWindowCamerasThread, this);
+	} else {
+		cout<<"ERROR: WEBCAM THREAD ALREADY STARTED"<<endl;
+		assert(true);
+	}
+}
+
+
+void WebcamCV::initCameraParams()
 {
 	img_width_received = the_webcam.get(CV_CAP_PROP_FRAME_WIDTH);
 	img_height_received = the_webcam.get(CV_CAP_PROP_FRAME_HEIGHT);
 	double readfps = the_webcam.get(CV_CAP_PROP_FPS);
 	std::cout<<"##### fps of webcam according to itself: "<<readfps<<std::endl;
 	
-	if(showingstuff)
-	{
-		brightness_slider = the_webcam.get(CV_CAP_PROP_BRIGHTNESS);
-		contrast_slider = the_webcam.get(CV_CAP_PROP_CONTRAST);
-		gain_slider = the_webcam.get(CV_CAP_PROP_GAIN);
-		saturation_slider = the_webcam.get(CV_CAP_PROP_SATURATION);
-		exposure_slider = the_webcam.get(CV_CAP_PROP_EXPOSURE);
-		exposure_slider+=20;
-	}
-	else
-	{
 #if 1
-		the_webcam.set(CV_CAP_PROP_FRAME_WIDTH, 320.0);
-		the_webcam.set(CV_CAP_PROP_FRAME_HEIGHT, 240.0);
-		the_webcam.set(CV_CAP_PROP_FPS, 30.0);
-		
-		//MultiPlatformSleep(2000);
-		
-		//the_webcam.set(CV_CAP_PROP_EXPOSURE, -10.0);
+	the_webcam.set(CV_CAP_PROP_FRAME_WIDTH, 320.0);
+	the_webcam.set(CV_CAP_PROP_FRAME_HEIGHT, 240.0);
+	the_webcam.set(CV_CAP_PROP_FPS, 30.0);
+	
+	//MultiPlatformSleep(2000);
+	//the_webcam.set(CV_CAP_PROP_EXPOSURE, -10.0);
 #else
-		the_webcam.set(CV_CAP_PROP_FRAME_WIDTH, 640.0);
-		the_webcam.set(CV_CAP_PROP_FRAME_HEIGHT, 480.0);
-		the_webcam.set(CV_CAP_PROP_FPS, 15.0);
+	the_webcam.set(CV_CAP_PROP_FRAME_WIDTH, 640.0);
+	the_webcam.set(CV_CAP_PROP_FRAME_HEIGHT, 480.0);
+	the_webcam.set(CV_CAP_PROP_FPS, 15.0);
 #endif
-	}
 }
 
 

@@ -13,6 +13,7 @@ protected:
 public:
 	nonlinear_swingup_optimal_controller() : trueControllerOptimized(nullptr) {}
 	
+	void Initialize(PendulumCartDCM2_Constants system_params, NonlinearController_Optimized* givenController);
 	void Initialize(PendulumCartDCM2_Constants system_params, std::string fromFile);
 	
 	virtual void Initialize(PendulumCartDCM2_Constants system_params);

@@ -33,19 +33,19 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	double debugging_last_linearized_control_PWM;
 	
 	
+	CV_PendCart_Measurer my_pendcart_measurer;
 	dcmotor_pendcart_EKF  my_kalman_filter;
 	
+	char lastlast_LQR_control_counter;
+	double lastlast_LQR_control_PWM;
+	double last_LQR_control_PWM;
 	double latest_LQR_control_PWM;
+	double last_LQR_signal_actually_sent;
 	dcm2_controller_inverted_linearized_LQR   mycontroller_LQR;
 	nonlinear_swingup_optimal_controller   mycontroller_nlswing;
 	dcm2_pc_position_controller_pid   mycontroller_position;
 	dcm2_controller_savedhumanreplay mycontroller_replay;
-	
-//--------------------------------------------------
-	std::ofstream * outFile;
-	void FinishUp();
-//--------------------------------------------------
-	
+
 	ColoredPendOrientationFinder myComputerVisionPendulumFinder;
 	
 	ArduinoSerialComm arduinoCommunicator;
@@ -57,8 +57,8 @@ public:
 	double SimulatedMeasurePendulumTheta() {return mypcart->positions[0].y;}
 	double SimulatedMeasureCartX() {return mypcart->positions[0].x;}
 	
-	Simulation_FinalDCM2ArduinoKalmanCV() : SimplerGameSimSystem(), mypcart(nullptr), outFile(nullptr) {}
-	~Simulation_FinalDCM2ArduinoKalmanCV() {FinishUp();}
+	Simulation_FinalDCM2ArduinoKalmanCV() : SimplerGameSimSystem(), mypcart(nullptr) {}
+	~Simulation_FinalDCM2ArduinoKalmanCV() {}
 	
 	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
 	

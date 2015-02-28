@@ -20,6 +20,7 @@ using std::cout; using std::endl;
 #include "Utils/SUtils.h"
 #include "NLControllerOptimization/RunNLOptimization.h"
 #include "NLControllerOptimization/EnableKeyPressToStopOptimization.h"
+#include "NLControllerOptimization/TrainControllerFromHumanData.h"
 #include "EstimationAndControl/CalculateSystemEnergy.h"
 
 
@@ -71,9 +72,25 @@ void InteractiveNonconvexOptimization::InitBeforeSimStart()
 	if(check_if_file_exists("output/result.txt")) {
 		cout<<"initializing from last results!"<<endl;
 		mycontroller_nlswing.Initialize(my_pcsys_constants, "output/result.txt");
+	} else if(check_if_file_exists("output/averaged_output_savedcontrols.humantrain")) {
+		cout<<"Initializing from human training file"<<endl;
+		TrainerFromHumanData humantrainer;
+		humantrainer.base_folder_containing_given_files = "output/";
+		humantrainer.saved_filenames_from_folder = GetFilenamesOfTypeInFolder("output", ".humantrain");
+		mycontroller_nlswing.Initialize(my_pcsys_constants, humantrainer.Load(7, true));
 	} else {
-		mycontroller_nlswing.Initialize(my_pcsys_constants);
+		cout<<"Initializing blank controller"<<endl;
+		NonlinearController_Optimized* newOptContrl = new NonlinearController_Optimized();
+		int newdims[4];
+		newdims[0] = 11; //theta
+		newdims[1] = 11; //omega
+		newdims[2] = 11; //cartx
+		newdims[3] = 11; //cartv
+		newOptContrl->Init(newdims);
+		mycontroller_nlswing.Initialize(my_pcsys_constants, newOptContrl);
 	}
+	mycontroller_LQR.Initialize(my_pcsys_constants);
+	max_linear_LQR_PWM = 0.5;
 	
 	//-------------------------------------------------------
 	/*if(outFile == nullptr) {
@@ -108,11 +125,12 @@ void InteractiveNonconvexOptimization::UpdateSystemStuff_OncePerFrame(double fra
 {
 	simulation_time_elapsed_mytracker += frametime;
 	double requested_PWM_joystick = 0.0;
-	double requested_PWM_control = 0.0;
+	double requested_PWM_NLcontrol = 0.0;
 	
 	
 	const double joystick_deadzone = 20.0;
 	bool joystick_out_of_deadzone = false;
+	bool zero_out_the_PWM = false;
 	
 	if(sf::Joystick::isConnected(0))
 	{
@@ -130,8 +148,18 @@ void InteractiveNonconvexOptimization::UpdateSystemStuff_OncePerFrame(double fra
 		
 		bool hasX = sf::Joystick::hasAxis(0, sf::Joystick::X);
 		bool hasU = sf::Joystick::hasAxis(0, sf::Joystick::U);
+		bool hasR = sf::Joystick::hasAxis(0, sf::Joystick::R);
+		bool hasPovX = sf::Joystick::hasAxis(0, sf::Joystick::PovX);
+		bool hasPovY = sf::Joystick::hasAxis(0, sf::Joystick::PovY);
 		double x = (double)(hasX ? sf::Joystick::getAxisPosition(0, sf::Joystick::X) : 0);
 		double u = (double)(hasU ? sf::Joystick::getAxisPosition(0, sf::Joystick::U) : 0);
+		double r = (double)(hasR ? sf::Joystick::getAxisPosition(0, sf::Joystick::R) : 0);
+		float povX = hasPovX ? sf::Joystick::getAxisPosition(0, sf::Joystick::PovX) : 0;
+		float povY = hasPovY ? sf::Joystick::getAxisPosition(0, sf::Joystick::PovY) : 0;
+
+		zero_out_the_PWM = (fabs(povX) > 0.01 || fabs(povY) > 0.01);
+		
+		max_linear_LQR_PWM = (r+100.0)/200.0;
 		
 		if(fabs(x) > joystick_deadzone || fabs(u) > joystick_deadzone) {
 			joystick_out_of_deadzone = true;
@@ -156,17 +184,43 @@ void InteractiveNonconvexOptimization::UpdateSystemStuff_OncePerFrame(double fra
 	currState.ST_omega = mypcart->get__omega();
 	currState.ST_cartx = mypcart->get__cartx();
 	currState.ST_cartx_dot = mypcart->get__cartvel();
-	requested_PWM_control = mycontroller_nlswing.GetControl(currState, frametime);
+	requested_PWM_NLcontrol = mycontroller_nlswing.GetControl(currState, frametime);
 	
-	double requested_PWM = (requested_PWM_joystick + requested_PWM_control);
+	double requested_PWM_linear = mycontroller_LQR.GetControl(currState, frametime);
+	const double linearized_MINangle = 28.0 * (physmath::PI/180.0);
+	const double linearized_MAXangle = 36.0 * (physmath::PI/180.0);
+	const double currAngleDiff = fabs(currState.ST_theta);
+	double linear_regime_alpha = 0.0; //  1.0 when fully in linear regime, 0.0 when fully out, interpolates between
+	if(currAngleDiff <= linearized_MINangle) {
+		linear_regime_alpha = 1.0;
+	} else if(currAngleDiff <= linearized_MAXangle) {
+		linear_regime_alpha = (1.0 - ((currAngleDiff-linearized_MINangle)/(linearized_MAXangle - linearized_MINangle)));
+	} else {//if(currAngleDiff > linearized_MAXangle) {
+		linear_regime_alpha = 0.0;
+	}
+	linear_regime_alpha *= max_linear_LQR_PWM; //maximum alpha
+	
+	double requested_PWM = 0.0;
+	requested_PWM += requested_PWM_linear*linear_regime_alpha;
+	requested_PWM += requested_PWM_NLcontrol*(1.0 - linear_regime_alpha);
+	requested_PWM += requested_PWM_joystick;
+	requested_PWM += keyboard_PWM_requested_saved;
+	
 	if(fabs(requested_PWM) > 1.0) {
 		requested_PWM /= fabs(requested_PWM);
 	}
-	
+	if(zero_out_the_PWM) {
+		requested_PWM = 0.0;
+	}
 //------------------------------------------------------------------------------------------------
-	if(joystick_out_of_deadzone) {
-		cout<<"saving joystick"<<endl;
-		mycontroller_nlswing.GetMyNLController()->AddSamplePoint(requested_PWM_joystick, currState.ST_theta, currState.ST_omega, currState.ST_cartx, currState.ST_cartx_dot);
+	if(joystick_out_of_deadzone || zero_out_the_PWM) {
+		cout<<"saving joystick"<<(zero_out_the_PWM ? " (zeroed) PWM: " : " PWM: ")<<requested_PWM<<" at phase space pt "<<currState<<endl;
+		mycontroller_nlswing.GetMyNLController()->AddSamplePoint(requested_PWM, currState.ST_theta, currState.ST_omega, currState.ST_cartx, currState.ST_cartx_dot);
+	} else if(linear_regime_alpha > 0.1) {
+		cout<<"saving LQR"<<endl;
+		mycontroller_nlswing.GetMyNLController()->AddSamplePoint(requested_PWM, currState.ST_theta, currState.ST_omega, currState.ST_cartx, currState.ST_cartx_dot);
+	} else if(zero_out_the_PWM) {
+		mycontroller_nlswing.GetMyNLController()->AddSamplePoint(requested_PWM, currState.ST_theta, currState.ST_omega, currState.ST_cartx, currState.ST_cartx_dot);
 	}
 //------------------------------------------------------------------------------------------------
 	
@@ -175,19 +229,47 @@ void InteractiveNonconvexOptimization::UpdateSystemStuff_OncePerFrame(double fra
 
 
 
+void InteractiveNonconvexOptimization::RespondToKeyStates()
+{
+    if(gGameSystem.GetKeyboard()->keyboard['j']) {
+		
+		if(false) {
+			keyboard_PWM_requested_saved -= 0.001;
+			if(keyboard_PWM_requested_saved < -1.0) keyboard_PWM_requested_saved = -1.0;
+		} else {
+			keyboard_PWM_requested_saved = -1.0;
+		}
+    }
+    else if(gGameSystem.GetKeyboard()->keyboard['k']) {
+		keyboard_PWM_requested_saved = 0.0;
+    }
+    else if(gGameSystem.GetKeyboard()->keyboard['l']) {
+		
+		if(false) {
+			keyboard_PWM_requested_saved += 0.001;
+			if(keyboard_PWM_requested_saved > 1.0) keyboard_PWM_requested_saved = 1.0;
+		} else {
+			keyboard_PWM_requested_saved = 1.0;
+		}
+    }
+}
+
+
 bool InteractiveNonconvexOptimization::FormatTextInfo(char* text_buffer, int line_n)
 {
 if(text_buffer != nullptr)
 {
 	if(line_n == 0) {
 	sprintf____s(text_buffer, "(theta, omega, x, xdot): (%5.3f, %5.3f, %5.3f, %5.3f)",
-					mypcart->get__theta(), mypcart->get__omega(), mypcart->get__cartx(), mypcart->get__cartvel());
+					physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0), mypcart->get__omega(), mypcart->get__cartx(), mypcart->get__cartvel());
 	} else if(line_n == 1) {
 	sprintf____s(text_buffer, "(PWM): (%1.2f)",
 					mypcart->myPhysics->given_control_force_u/my_pcsys_constants.uscalar);
 	} else if(line_n == 2) {
 		sprintf____s(text_buffer, "ENERGY: %f",
 					SystemEnergy_GetInternalEnergy(my_pcsys_constants, mypcart->get__theta(), mypcart->get__omega(), mypcart->get__cartx(), mypcart->get__cartvel()));
+	} else if(line_n == 3) {
+		sprintf____s(text_buffer, "max linear LQR PWM: %f", max_linear_LQR_PWM);
 	}
 	else {return false;}
 	return true;
@@ -246,6 +328,7 @@ void InteractiveNonconvexOptimization::DrawSystemStuff()
 			delete nloptsofar__best_score_data.thethread;
 			nloptsofar__best_score_data.thethread = nullptr;
 			InitializeNewSimulation();
+			mycontroller_nlswing.GetMyNLController()->SaveMeToFile("output/result.txt");
 		}
 	} else if(SystemIsPaused) {
 		if(sf::Joystick::isButtonPressed(0, 1)) {
@@ -255,7 +338,7 @@ void InteractiveNonconvexOptimization::DrawSystemStuff()
 	nloptsofar__best_score_data.my_mutex.unlock();
 	
 	if(sf::Joystick::isButtonPressed(0,4)) {
-		initial_theta = mypcart->get__theta();
+		initial_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 		initial_omega = mypcart->get__omega();
 		initial_cartx = mypcart->get__cartx();
 		initial_cartv = mypcart->get__cartvel();

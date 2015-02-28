@@ -3,13 +3,24 @@
  *
  * Author: Jason Bunk
  * Web page: http://sites.google.com/site/jasonbunk
- * License: Apache License Version 2.0, January 2004
+ * 
  * Copyright (c) 2015 Jason Bunk
- */
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 #include "DCMotor_PendCart_EKF.h"
 #include "../PendCart_State_CVMat_defines.h"
 #include "../../TryIncludeJPhysics.h"
 #include "../../Utils/MathUtils.h"
+#include "PrinterPhys124_PendCart_Params.h"
 using std::cout; using std::endl;
 
 //#define TALK_WHEN_UPDATING 1
@@ -46,11 +57,11 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	
 	// predicted states
 	//
-	//cv::Mat x_k_km1  =  function_step_time_xvec(dt, state_history.back().xvec, current_control_u);
+	cv::Mat x_k_km1  =  function_step_time_xvec(dt, state_history.back().xvec, current_control_u);
 	//cv::Mat x_k_km1  =  Fkm1_J * state_history.back().xvec; //works for small angles
 	
 	//for LQR testing
-	cv::Mat x_k_km1 = (ExperimentalGetFmatLinearized(dt)*state_history.back().xvec) + (GetControlBMat(dt)*current_control_u);
+	//cv::Mat x_k_km1 = (ExperimentalGetFmatLinearized(dt)*state_history.back().xvec) + (GetControlBMat(dt)*current_control_u);
 	
 	
 	/*std::cout<<"======================================"<<std::endl<<std::endl;
@@ -78,6 +89,7 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	else
 	{
 		assert(possibly_given_measurement->data.cols == 1);
+		assert(possibly_given_measurement->data.rows == 2);
 		cv::Mat Hk;
 		cv::Mat Rmat;
 		
@@ -94,15 +106,67 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 		cv::Mat HkT;
 		cv::transpose(Hk, HkT);
 		
+		/*
+			Calculate measurement residual: (measurement) - (model prediction)
+		*/
 		cv::Mat ytilda = (possibly_given_measurement->data) - Hk*x_k_km1;
 		
 		cv::Mat Sk = (Hk*P_k_km1*HkT) + Rmat;
 		
+#if 0
 		cv::Mat Sk_inverted;
 		double checksingular = cv::invert(Sk, Sk_inverted); //must be invertible
 		assert(checksingular != 0.0);
 		
+		/*
+			Calculate Kalman gain matrix Kk
+		*/
 		cv::Mat Kk = P_k_km1 * HkT * Sk_inverted;
+#else
+		//note: ytilda is: 2 rows, 1 column
+		//fixed gain matrix: 4 rows, 2 columns
+		cv::Mat Kk = cv::Mat::zeros(4,2,CV_64F);
+		
+		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
+			Kk.at<double>(0,0) = 0.9;
+			Kk.at<double>(2,1) = 0.9;
+			
+			if(fabs(ytilda.POSMEAS__theta) > max_reasonable_measurement_ytilda__theta
+			|| fabs(ytilda.POSMEAS__cartx) > max_reasonable_measurement_ytilda__cartx)
+			{
+				//ytilda = cv::Mat::zeros(2,1,CV_64F);
+				
+				cout<<"POS meas. was unreasonable? original ytilda: "<<ytilda;
+				
+				double ytildalen = sqrt((ytilda.POSMEAS__theta*ytilda.POSMEAS__theta) + (ytilda.POSMEAS__cartx*ytilda.POSMEAS__cartx));
+				ytilda /= ytildalen;
+				ytilda *= 0.001;
+				
+				cout<<", new ytilda: "<<ytilda<<endl;
+			}
+		
+		} else if(possibly_given_measurement->type == CV_PendCart_Measurement::velocities) {
+			Kk.at<double>(1,0) = 0.1;
+			Kk.at<double>(3,1) = 0.1;
+			
+			if(fabs(ytilda.VELMEAS__omega) > max_reasonable_measurement_ytilda__omega
+			|| fabs(ytilda.VELMEAS__cartv) > max_reasonable_measurement_ytilda__cartv)
+			{
+				//ytilda = cv::Mat::zeros(2,1,CV_64F);
+				
+				cout<<"VEL meas. was unreasonable? original ytilda: "<<ytilda;
+				
+				double ytildalen = sqrt((ytilda.POSMEAS__theta*ytilda.POSMEAS__theta) + (ytilda.POSMEAS__cartx*ytilda.POSMEAS__cartx));
+				ytilda /= ytildalen;
+				ytilda *= 0.001;
+				
+				cout<<", new ytilda: "<<ytilda<<endl;
+			}
+		}
+		
+		//Kk.at<double>(0,0) = 0.5;
+		//Kk.at<double>(1,1) = 0.5;
+#endif
 		
 		
 		cv::Mat x_k_k = x_k_km1 + (Kk*ytilda);

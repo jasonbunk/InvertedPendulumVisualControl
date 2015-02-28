@@ -4,6 +4,7 @@
 #include "SimplerGameSimSystem.h"
 #include "EstimationAndControl/PendulumCart_Constants.h"
 #include "EstimationAndControl/Control/Controller_NonlinearSwingup.h"
+#include "EstimationAndControl/Control/Controller_LQR.h"
 #include <thread>
 
 class InteractiveNonconvexOptimization : public SimplerGameSimSystem
@@ -20,6 +21,9 @@ class InteractiveNonconvexOptimization : public SimplerGameSimSystem
 	double drawn_but_not_physical__cart_limits;
 	double drawn_but_not_physical__cart_limits_inner;
 	
+	double max_linear_LQR_PWM;
+	double keyboard_PWM_requested_saved;
+	dcm2_controller_inverted_linearized_LQR   mycontroller_LQR;
 	nonlinear_swingup_optimal_controller   mycontroller_nlswing;
 	
 //--------------------------------------------------
@@ -37,6 +41,7 @@ public:
 	~InteractiveNonconvexOptimization() {FinishUp();}
 	
 	
+	virtual void RespondToKeyStates();
 	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
 	virtual void UpdateSystemStuff_OncePerFrame(double frametime);
 	virtual void DrawSystemStuff();

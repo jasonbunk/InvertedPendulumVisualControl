@@ -2,14 +2,13 @@
 #define ___WEBCAM_HPP_______
 
 #include <opencv2/opencv.hpp>
-
+#include <thread>
+#include <mutex>
 
 class WebcamCV
 {
     const int this_webcam_number;
     WebcamCV() : this_webcam_number(9999) {}
-
-    std::string winNameStr;
 
     cv::VideoCapture the_webcam;
     cv::Mat last_received_image;
@@ -20,25 +19,28 @@ class WebcamCV
     int gain_slider;
     int saturation_slider;
     int exposure_slider; //exposure range is from 0 to -7.
-
+	
     int img_width_received;
     int img_height_received;
-
-    void setCameraVals();
-    void getCameraVals(bool showingstuff);
-
-
+	
+    void initCameraParams();
+	
+	std::mutex image_mutex;
+	std::thread* grabbing_images_thread;
+	bool haveGrabbedThisImage;
+	void UpdateWindowCamerasThread();
+	
 public:
-    void InitWindow(bool showstuff);
-    void UpdateWindow(bool showstuff);
-
-
-    cv::Mat * GetLastReceivedImage() {return &last_received_image;}
+    void InitWindow();
+    void UpdateWindowMainThread();
+	
+	void StartAutoGrabImagesThread();
+	cv::Mat* CheckForNewImageFromThread();
+	
+    cv::Mat GetLastReceivedImageMainThread();
     const int GetImageWidth() {return img_width_received;}
     const int GetImageHeight() {return img_height_received;}
-	const std::string GetWinNameStr() {return winNameStr;}
-
-
+	
     WebcamCV(int camera_number) :
         this_webcam_number(camera_number),
         the_webcam(camera_number),
@@ -48,7 +50,9 @@ public:
         saturation_slider(80),
         exposure_slider(1),
         img_width_received(-1),
-        img_height_received(-1)
+        img_height_received(-1),
+        grabbing_images_thread(nullptr),
+        haveGrabbedThisImage(false)
         {}
 };
 

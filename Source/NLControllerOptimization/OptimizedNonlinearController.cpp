@@ -3,9 +3,19 @@
  *
  * Author: Jason Bunk
  * Web page: http://sites.google.com/site/jasonbunk
- * License: Apache License Version 2.0, January 2004
+ * 
  * Copyright (c) 2015 Jason Bunk
- */
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 /*
 	Tries to find the optimum time-invariant control solution: u(STATE)
 	
@@ -43,14 +53,19 @@ using std::cout; using std::endl;
 #define USE_QUADRILINEAR_INTERPOLATION 1
 
 
+#define MAX_RANGE_OF_X PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS
+#define MAX_RANGE_OF_OMEGA (PRINTER_EXPECTED_MAX_OMEGA)
+#define MAX_RANGE_OF_VELOCITY (PRINTER_EXPECTED_MAX_VELOCITY * 0.7)
+
+
 void MyStateVariable::SetRange(double EXPECTED_MAX, int NUM_GRIDPOINTS)
 {
 	expect_max = EXPECTED_MAX;
 	expect_min = (-1.0 * EXPECTED_MAX);
 	expect_range_min_to_max = (expect_max - expect_min);
 	
-	int NUM_BINS = (NUM_GRIDPOINTS-1);
-	bin_width = expect_range_min_to_max / ((double)NUM_BINS);
+	nbins = (NUM_GRIDPOINTS-1);
+	bin_width = expect_range_min_to_max / ((double)nbins);
 	
 	gridvalues_lookup.resize(NUM_GRIDPOINTS);
 	for(int ii=0; ii<NUM_GRIDPOINTS; ii++) {
@@ -60,17 +75,61 @@ void MyStateVariable::SetRange(double EXPECTED_MAX, int NUM_GRIDPOINTS)
 }
 
 
+void NonlinearController_Optimized::Init(int* griddims, double scale_width_around_setpoint /*= 1.0*/)
+{
+	vars.resize(NumStateVars);
+	
+	vars[theta].SetRange(physmath::PI * scale_width_around_setpoint, griddims[0]);
+	vars[omega].SetRange(MAX_RANGE_OF_OMEGA * scale_width_around_setpoint, griddims[1]);
+	vars[cartx].SetRange(MAX_RANGE_OF_X * scale_width_around_setpoint, griddims[2]);
+	vars[cartv].SetRange(MAX_RANGE_OF_VELOCITY * scale_width_around_setpoint, griddims[3]);
+	
+	/*
+		Matrix is 4-dimensional:
+		------------------------
+		dim 0: theta
+		dim 1: omega
+		dim 2: cartx
+		dim 3: cartv
+	*/
+	Controller4D.Init(griddims);
+	
+	
+	/*for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
+					cout<<"~~~~ set "<<Controller4D.GetRawPtrIndex(ii,jj,kk,mm)<<" to that value"<<endl;
+					get_at(ii,jj,kk,mm) = Controller4D.GetRawPtrIndex(ii,jj,kk,mm);
+				}
+			}
+		}
+	}
+	
+	/*for(int n=0; n<GetTotalGridPoints(); n++) {
+		cout<<"value["<<n<<"] === "<<(Controller4D.GetGridCptr()[n])<<endl;
+	}
+	cout<<"--------------------------------- enforcing boundary conditions"<<endl;
+	EnforceXBoundaryConditions();
+	
+	for(int n=0; n<GetTotalGridPoints(); n++) {
+		cout<<"value["<<n<<"] === "<<(Controller4D.GetGridCptr()[n])<<endl;
+	}
+	cout<<endl;*/
+}
+
+
 void NonlinearController_Optimized::Init(int gridpoints, double scale_width_around_setpoint/* = 1.0*/)
 {
-	gridpoints_per_axis = gridpoints;
-	gridpoints_per_axis_minus_one = (gridpoints - 1);
+	int gridpoints_per_axis = gridpoints;
+	int gridpoints_per_axis_minus_one = (gridpoints - 1);
 	
 	vars.resize(NumStateVars);
 	
-	vars[theta].SetRange(physmath::PI * 1.000000001 * scale_width_around_setpoint, gridpoints); //so values can never fall on the boundary, when scale width is 1
-	vars[omega].SetRange(PRINTER_EXPECTED_MAX_OMEGA * 1.1 * scale_width_around_setpoint, gridpoints);
-	vars[cartx].SetRange(PRINTER_LINEAR_WIDTH_X * scale_width_around_setpoint, gridpoints);
-	vars[cartv].SetRange(PRINTER_EXPECTED_MAX_VELOCITY * scale_width_around_setpoint, gridpoints);
+	vars[theta].SetRange(physmath::PI * scale_width_around_setpoint, gridpoints); //so values can never fall on the boundary, when scale width is 1
+	vars[omega].SetRange(MAX_RANGE_OF_OMEGA * scale_width_around_setpoint, gridpoints);
+	vars[cartx].SetRange(MAX_RANGE_OF_X * scale_width_around_setpoint, gridpoints);
+	vars[cartv].SetRange(MAX_RANGE_OF_VELOCITY * scale_width_around_setpoint, gridpoints);
 	
 	/*
 		Matrix is 4-dimensional:
@@ -172,14 +231,14 @@ void NonlinearController_Optimized::AddSamplePoint(double CONTROLU, double THETA
 		//if(thisAlphaLength <= 1e-9) {thisAlphaLength = 1e-9;}
 		
 		//cout<<"CONTROLU === "<<CONTROLU<<endl;
-		cout<<"old getat: "<<get_at(boff)<<endl;
+		//cout<<"old getat: "<<get_at(boff)<<endl;
 		
 		get_at(boff) += CONTROLU/thisAlphaLength;
 		if(fabs(get_at(boff)) > 1.0) {
 			get_at(boff) /= fabs(get_at(boff));
 		}
 		
-		cout<<"new getat: "<<get_at(boff)<<endl;
+		//cout<<"new getat: "<<get_at(boff)<<endl;
 #if 0
 		AveragingController4D_WeightedSumNumerator.get_at(boff) += CONTROLU / thisAlphaLength;
 		AveragingController4D_WeightedSumDenominator.get_at(boff) += 1.0 / thisAlphaLength;
@@ -190,12 +249,14 @@ void NonlinearController_Optimized::AddSamplePoint(double CONTROLU, double THETA
 	AveragingController4D_WeightedSumNumerator /= AveragingController4D_WeightedSumDenominator;
 	(*this) *= AveragingController4D_WeightedSumNumerator;
 #endif
+	
+	EnforceXBoundaryConditions();
 }
 
 
 
-#define GET_LEFT_GRIDPT(GIVEN_VARR, VARR) ( ((GIVEN_VARR) <= vars[(VARR)].expect_min) ? 0 : MIN(gridpoints_per_axis_minus_one, (int)floor(((GIVEN_VARR)-vars[(VARR)].expect_min) / vars[(VARR)].bin_width)) )
-#define GET_RIGHT_GRIDPT(GIVEN_VARR, VARR, BBIN0) ( ((GIVEN_VARR) >= vars[(VARR)].expect_max) ? gridpoints_per_axis_minus_one : MAX((BBIN0), (int)ceil(((GIVEN_VARR)-vars[(VARR)].expect_min) / vars[(VARR)].bin_width)) )
+#define GET_LEFT_GRIDPT(GIVEN_VARR, VARR) ( ((GIVEN_VARR) <= vars[(VARR)].expect_min) ? 0 : MIN(vars[(VARR)].nbins, (int)floor(((GIVEN_VARR)-vars[(VARR)].expect_min) / vars[(VARR)].bin_width)) )
+#define GET_RIGHT_GRIDPT(GIVEN_VARR, VARR, BBIN0) ( ((GIVEN_VARR) >= vars[(VARR)].expect_max) ? vars[(VARR)].nbins : MAX((BBIN0), (int)ceil(((GIVEN_VARR)-vars[(VARR)].expect_min) / vars[(VARR)].bin_width)) )
 #define GET_INTERP_ALPHA(GIVEN_VARR, VARR, BBIN0, BIN1) ( (BBIN0) == (BIN1) ? 1.0 : ((GIVEN_VARR) - vars[(VARR)].gridvalues_lookup[(BBIN0)]) / vars[(VARR)].bin_width )
 
 
@@ -351,14 +412,29 @@ double NonlinearController_Optimized::GetControl(double THETA, double OMEGA, dou
 }
 
 
+void NonlinearController_Optimized::EnforceXBoundaryConditions()
+{
+	return;
+	
+	for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			//for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
+					get_at(ii,jj,0,mm) = 0.0;
+					get_at(ii,jj,vars[2].nbins,mm) = 0.0;
+				}
+			//}
+		}
+	}
+}
 
 
 NonlinearController_Optimized& NonlinearController_Optimized::operator-=(const NonlinearController_Optimized& rhs)
 {
-	for(int ii=0; ii < gridpoints_per_axis; ii++) {
-		for(int jj=0; jj < gridpoints_per_axis; jj++) {
-			for(int kk=0; kk < gridpoints_per_axis; kk++) {
-				for(int mm=0; mm < gridpoints_per_axis; mm++) {
+	for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
 					get_at(ii,jj,kk,mm) -= rhs.cget_at(ii,jj,kk,mm);
 				}
 			}
@@ -369,10 +445,10 @@ NonlinearController_Optimized& NonlinearController_Optimized::operator-=(const N
 
 NonlinearController_Optimized& NonlinearController_Optimized::operator+=(const NonlinearController_Optimized& rhs)
 {
-	for(int ii=0; ii < gridpoints_per_axis; ii++) {
-		for(int jj=0; jj < gridpoints_per_axis; jj++) {
-			for(int kk=0; kk < gridpoints_per_axis; kk++) {
-				for(int mm=0; mm < gridpoints_per_axis; mm++) {
+	for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
 					get_at(ii,jj,kk,mm) += rhs.cget_at(ii,jj,kk,mm);
 				}
 			}
@@ -383,10 +459,10 @@ NonlinearController_Optimized& NonlinearController_Optimized::operator+=(const N
 
 NonlinearController_Optimized& NonlinearController_Optimized::operator*=(const NonlinearController_Optimized& rhs)
 {
-	for(int ii=0; ii < gridpoints_per_axis; ii++) {
-		for(int jj=0; jj < gridpoints_per_axis; jj++) {
-			for(int kk=0; kk < gridpoints_per_axis; kk++) {
-				for(int mm=0; mm < gridpoints_per_axis; mm++) {
+	for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
 					get_at(ii,jj,kk,mm) *= rhs.cget_at(ii,jj,kk,mm);
 				}
 			}
@@ -397,10 +473,10 @@ NonlinearController_Optimized& NonlinearController_Optimized::operator*=(const N
 
 NonlinearController_Optimized& NonlinearController_Optimized::operator/=(const NonlinearController_Optimized& rhs)
 {
-	for(int ii=0; ii < gridpoints_per_axis; ii++) {
-		for(int jj=0; jj < gridpoints_per_axis; jj++) {
-			for(int kk=0; kk < gridpoints_per_axis; kk++) {
-				for(int mm=0; mm < gridpoints_per_axis; mm++) {
+	for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
 					get_at(ii,jj,kk,mm) /= rhs.cget_at(ii,jj,kk,mm);
 				}
 			}
@@ -411,10 +487,10 @@ NonlinearController_Optimized& NonlinearController_Optimized::operator/=(const N
 
 void NonlinearController_Optimized::ExpandOffGridNANcontrols()
 {
-	for(int ii=0; ii < gridpoints_per_axis; ii++) {
-		for(int jj=0; jj < gridpoints_per_axis; jj++) {
-			for(int kk=0; kk < gridpoints_per_axis; kk++) {
-				for(int mm=0; mm < gridpoints_per_axis; mm++) {
+	for(int ii=0; ii <= vars[0].nbins; ii++) {
+		for(int jj=0; jj <= vars[1].nbins; jj++) {
+			for(int kk=0; kk <= vars[2].nbins; kk++) {
+				for(int mm=0; mm <= vars[3].nbins; mm++) {
 					if(isnan(cget_at(ii,jj,kk,mm))) {
 						get_at(ii,jj,kk,mm) = GetNeighborhoodAvg(ii,jj,kk,mm);
 					}
@@ -424,8 +500,8 @@ void NonlinearController_Optimized::ExpandOffGridNANcontrols()
 	}
 }
 
-#define LOOP_NEAR_GRID_PT_CONSTRAINED(ITERVAR,IVARRGIVEN) for(int ITERVAR = (IVARRGIVEN <= 0 ? 0 : (IVARRGIVEN-1)); \
-															ITERVAR < (IVARRGIVEN >= gridpoints_per_axis_minus_one ? gridpoints_per_axis_minus_one : (IVARRGIVEN+1)); \
+#define LOOP_NEAR_GRID_PT_CONSTRAINED(ITERVAR,IVARRGIVEN,VARR) for(int ITERVAR = (IVARRGIVEN <= 0 ? 0 : (IVARRGIVEN-1)); \
+															ITERVAR < (IVARRGIVEN >= vars[(VARR)].nbins ? vars[(VARR)].nbins : (IVARRGIVEN+1)); \
 															ITERVAR++)
 
 double NonlinearController_Optimized::GetNeighborhoodAvg(int i, int j, int k, int m)
@@ -433,10 +509,10 @@ double NonlinearController_Optimized::GetNeighborhoodAvg(int i, int j, int k, in
 	double numerator = 0.0;
 	double denominator = 0.0;
 	
-	LOOP_NEAR_GRID_PT_CONSTRAINED(ii,i) {
-		LOOP_NEAR_GRID_PT_CONSTRAINED(jj,j) {
-			LOOP_NEAR_GRID_PT_CONSTRAINED(kk,k) {
-				LOOP_NEAR_GRID_PT_CONSTRAINED(mm,m) {
+	LOOP_NEAR_GRID_PT_CONSTRAINED(ii,i,0) {
+		LOOP_NEAR_GRID_PT_CONSTRAINED(jj,j,1) {
+			LOOP_NEAR_GRID_PT_CONSTRAINED(kk,k,2) {
+				LOOP_NEAR_GRID_PT_CONSTRAINED(mm,m,3) {
 					if(isnan(cget_at(ii,jj,kk,mm)) == false) {
 						numerator += cget_at(ii,jj,kk,mm);
 						denominator += 1.0;

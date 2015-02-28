@@ -4,6 +4,7 @@
 #include <string.h>
 #include <vector>
 #include <math.h>
+#include <iostream>
 
 /*======================================================================================
 	Information about a state space variable (num gridpoints, spatial widths of bins, etc)
@@ -16,6 +17,7 @@ public:
 	double expect_range_min_to_max;
 	double bin_width;
 	std::vector<double> gridvalues_lookup; //position (in state space) of each grid point
+	int nbins;
 	
 	void SetRange(double EXPECTED_MAX, int NUM_GRIDPOINTS);
 };
@@ -124,6 +126,7 @@ public:
 		int bytes_to_malloc = totalgridpts*((int)sizeof(T));
 		grid = (T*)malloc(bytes_to_malloc);
 		memset(grid, 0, bytes_to_malloc);
+		std::cout<<"initialized 4D phase space grid (all dimensions same size) with "<<totalgridpts<<" total grid points"<<std::endl;
 	}
 	virtual void Init(int* dims4D) {
 		dims[0] = dims4D[0];
@@ -134,11 +137,13 @@ public:
 		int bytes_to_malloc = totalgridpts*((int)sizeof(T));
 		grid = (T*)malloc(bytes_to_malloc);
 		memset(grid, 0, bytes_to_malloc);
+		std::cout<<"initialized 4D phase space grid (dimension-by-dimension) with "<<totalgridpts<<" total grid points"<<std::endl;
 	}
 	
-	virtual T c_at(int i0, int i1, int i2, int i3) const {return givenGridOverride != nullptr ? givenGridOverride[i3+dims[3]*(i2+dims[2]*(i1+dims[1]*i0))] : grid[i3+dims[3]*(i2+dims[2]*(i1+dims[1]*i0))];}
-	virtual T & at(int i0, int i1, int i2, int i3) {return grid[i3+dims[3]*(i2+dims[2]*(i1+dims[1]*i0))];}
-	virtual T & at(binIndices idx) {return grid[idx.cartvbin+dims[3]*(idx.cartxbin+dims[2]*(idx.omegabin+dims[1]*idx.thetabin))];}
+	int GetRawPtrIndex(int i0, int i1, int i2, int i3) const {return i3+dims[3]*(i2+dims[2]*(i1+dims[1]*i0));}
+	virtual T c_at(int i0, int i1, int i2, int i3) const {return givenGridOverride != nullptr ? givenGridOverride[GetRawPtrIndex(i0,i1,i2,i3)] : grid[GetRawPtrIndex(i0,i1,i2,i3)];}
+	virtual T & at(int i0, int i1, int i2, int i3) {return grid[GetRawPtrIndex(i0,i1,i2,i3)];}
+	virtual T & at(binIndices idx) {return grid[GetRawPtrIndex(idx.thetabin,idx.omegabin,idx.cartxbin,idx.cartvbin)];}
 									//{return grid[idx.thetabin][idx.omegabin][idx.cartxbin][idx.cartvbin];}
 	
 	virtual void SetAllTo(T val) {

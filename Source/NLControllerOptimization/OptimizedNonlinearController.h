@@ -40,8 +40,6 @@ public:
 		NumStateVars
 	};
 protected:
-	int gridpoints_per_axis;
-	int gridpoints_per_axis_minus_one;
 	std::vector<MyStateVariable> vars;
 	
 	//MyPhaseSpaceGrid4DClass<double> Controller4D;
@@ -63,10 +61,13 @@ public:
 	void SaveMeToFile(std::string filename);
 	void InitFromFile(std::string controllerfile, double scale_width_around_setpoint = 1.0);
 	void Init(int gridpoints, double scale_width_around_setpoint = 1.0);
+	void Init(int* griddims, double scale_width_around_setpoint = 1.0);
 	
 	void GetGridCornersForOffGridPoint(double THETA, double OMEGA, double CARTX, double CARTV,
 											binIndices & bin0, binIndices & bin1,
 											binOffGridAlphas & ba);
+	
+	void EnforceXBoundaryConditions();
 	
 	double cget_at(int i0, int i1, int i2, int i3) const {return Controller4D.c_at(i0,i1,i2,i3);}
 	double & get_at(int i0, int i1, int i2, int i3) {return Controller4D.at(i0,i1,i2,i3);}

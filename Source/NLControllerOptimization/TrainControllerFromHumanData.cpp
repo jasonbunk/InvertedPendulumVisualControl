@@ -3,9 +3,19 @@
  *
  * Author: Jason Bunk
  * Web page: http://sites.google.com/site/jasonbunk
- * License: Apache License Version 2.0, January 2004
+ * 
  * Copyright (c) 2015 Jason Bunk
- */
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+*/
 #include "TrainControllerFromHumanData.h"
 #include <fstream>
 #include "Utils/SUtils.h"
@@ -161,7 +171,8 @@ NonlinearController_Optimized * TrainerFromHumanData::Load(int gridpoints_per_ax
 	NonlinearController_Optimized * retval = new NonlinearController_Optimized();
 	retval->Init(gridpoints_per_axis);
 	
-	(*retval) += (AveragingController4D_WeightedSumNumerator / AveragingController4D_WeightedSumDenominator);
+	AveragingController4D_WeightedSumNumerator /= AveragingController4D_WeightedSumDenominator;
+	(*retval) += AveragingController4D_WeightedSumNumerator;
 	
 	retval->ExpandOffGridNANcontrols();
 	

@@ -149,6 +149,12 @@ void GameSystemBase::Update(double frameTime)
 	if(fixed_time_step > 0.0)
 	{
 		fixed_time_step_accumulator += frameTime;
+		
+		if(fixed_time_step_accumulator > 0.4) {
+			cout<<"accumulated too large of a time step: "<<fixed_time_step_accumulator<<" ... rolling back to limit 0.4 sec"<<endl;
+			fixed_time_step_accumulator = 0.4;
+		}
+		
 		while(fixed_time_step_accumulator >= fixed_time_step)
 		{
 			double this_step_size = fixed_time_step;
@@ -244,9 +250,9 @@ void GameSystemBase::Update(double frameTime)
 			physics_system->UpdateSystemStuff_OncePerFrame(m_currFrameTime);
 		}
 		
-		for(int ii=0; ii<100; ii++) {
-			physics_system->UpdateSystemStuff_EachPhysicsStep(m_currFrameTime * 0.01);
-			physics_system->updateAll(m_currFrameTime * 0.01);
+		for(int ii=0; ii<50; ii++) {
+			physics_system->UpdateSystemStuff_EachPhysicsStep(m_currFrameTime * 0.02);
+			physics_system->updateAll(m_currFrameTime * 0.02);
 		}
 		
 		if(doOnceUpdatesFirst==false) {

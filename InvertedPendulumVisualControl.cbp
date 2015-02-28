@@ -38,15 +38,34 @@
 				</Linker>
 			</Target>
 			<Target title="Release">
-				<Option output="bin/InvertedPendulumVisualControl" prefix_auto="1" extension_auto="1" />
-				<Option object_output="obj/Release/" />
+				<Option output="build/InvertedPendulumVisualControl" prefix_auto="1" extension_auto="1" />
+				<Option object_output="build/obj/Release/" />
 				<Option type="1" />
 				<Option compiler="gcc" />
 				<Compiler>
 					<Add option="-O2" />
+					<Add option="-std=c++11" />
+					<Add directory="../JPhysics/Headers" />
+					<Add directory="../JPhysics/Headers/JPhysics" />
+					<Add directory="Source" />
 				</Compiler>
 				<Linker>
 					<Add option="-s" />
+					<Add library="../JPhysics/build/Debug_Linux64/libJPhysics.a" />
+					<Add library="GLEW" />
+					<Add library="GL" />
+					<Add library="GLU" />
+					<Add library="rt" />
+					<Add library="X11" />
+					<Add library="sfml-system" />
+					<Add library="sfml-graphics" />
+					<Add library="sfml-window" />
+					<Add library="sfml-network" />
+					<Add library="opencv_highgui" />
+					<Add library="opencv_core" />
+					<Add library="opencv_imgproc" />
+					<Add library="m" />
+					<Add library="nlopt" />
 				</Linker>
 			</Target>
 		</Build>

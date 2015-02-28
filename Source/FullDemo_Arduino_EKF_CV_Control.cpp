@@ -24,8 +24,11 @@ using std::cout; using std::endl;
 #define LQR_CONTROL 1
 //#define FULLSTATE_NL_CONTROL 1
 
-//#define DO_REAL_CV_FOLLOWING 1
+#define ALWAYS_DO_JOYSTICK_CONTROL 1
+#define DO_REAL_CV_FOLLOWING 1
+#define DO_REAL_CONTROLLER_BASED_ON_CV 1
 
+//#define KALMAN_IS_REALTIME_NOT_EXTRAPOLATED 1
 
 
 void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
@@ -33,7 +36,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	simulation_time_elapsed_mytracker = 0.0;
 	
 	
-	arduinoCommunicator.Connect("/dev/ttyACM1", 19200);
+	arduinoCommunicator.Connect("/dev/ttyACM0", 57600);
 	
 	
 	
@@ -43,9 +46,12 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
     mypcart = new phys::dcmotor22_pendcart();
     mypcart->myEntSystem = this;
 	
-    const double initial__theta = ((physmath::PI/180.0) * 180.0);
     const double initial__omega = 0.0;
-    
+#if LQR_SIMULATION
+    const double initial__theta = ((physmath::PI/180.0) * 18.0);
+#else
+    const double initial__theta = ((physmath::PI/180.0) * 180.0);
+#endif
     
     my_pcsys_constants = GetPhysicalPrinterSystemConstants(false);
     InitializeJPhysicsInstance(mypcart, false);
@@ -65,10 +71,13 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	mypcart->color[1] = 50;
 	mypcart->color[2] = 255;
 	
+#if DO_REAL_CONTROLLER_BASED_ON_CV
+#else
 	allOldEntities.push_back(mypcart);
+#endif
 	
 	gGameSystem.camera_rotation.r = 2.0; //zoom in
-	gGameSystem.fixed_time_step = 0.0025;
+	gGameSystem.fixed_time_step = 0.005;
 	gGameSystem.fixed_timestep_randomizer__stddev = -0.001; //negative: don't randomizes
 	INTEGRATOR = 5; //fourth-order Runge-Kutta
     stop_entities_that_exit_level_boundaries = false;
@@ -80,10 +89,12 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	sf::Joystick::update();
 	keyboard_PWM_requested_saved = 0.0;
 	
-	
+#if ALWAYS_DO_JOYSTICK_CONTROL
+#elif !DO_REAL_CV_FOLLOWING
 	mycontroller_nlswing.Initialize(my_pcsys_constants);
-	mycontroller_LQR.Initialize(my_pcsys_constants);
-#if LQR_SIMULATION
+#endif
+
+#if LQR_SIMULATION or DO_REAL_CV_FOLLOWING
 //====================================================================================================
 // Initialize Kalman Filter
 	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(4,1,CV_64F);
@@ -92,7 +103,13 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
     initial_state_for_Kalman.ST_cartx   = mypcart->get__cartx();
     initial_state_for_Kalman.ST_cartx_dot=mypcart->get__cartvel();
 	my_kalman_filter.Initialize(simulation_time_elapsed_mytracker, initial_state_for_Kalman, my_pcsys_constants);
+	
+	my_kalman_filter.max_reasonable_measurement_ytilda__theta =  996.2; //good value is at most 6ish
+	my_kalman_filter.max_reasonable_measurement_ytilda__omega = 912.2;
+	my_kalman_filter.max_reasonable_measurement_ytilda__cartx =  996.2;
+	my_kalman_filter.max_reasonable_measurement_ytilda__cartv = 912.2;
 //=====================================================================
+	mycontroller_LQR.Initialize(my_pcsys_constants);
 #endif
 	
 	
@@ -100,25 +117,46 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	mycontroller_position.Initialize(my_pcsys_constants);
 	
 	//-------------------------------------------------------
-	/*if(outFile == nullptr) {
-		outFile = new std::ofstream();
-		int num_saved_files = CountFilesOfTypeInFolder("output", ".txt");
-		outFile->open(std::string("output/")+to_istring(num_saved_files+1)+std::string("_output_savedcontrols.txt"));
-	}*/
 	
 #if DO_REAL_CV_FOLLOWING
 	myComputerVisionPendulumFinder.InitializeNow();
 #endif
+	SystemIsPaused = false;
+	simulation_time_elapsed_mytracker = gGameSystem.GetTimeElapsed();
+	cout<<"sim time since program start (time spent calibrating): "<<simulation_time_elapsed_mytracker<<endl;
+
+
+	lastlast_LQR_control_counter = 0;
+	lastlast_LQR_control_PWM = 0.0;
+	last_LQR_control_PWM = 0.0;
+	latest_LQR_control_PWM = 0.0;
+	last_LQR_signal_actually_sent = 0.0;
 }
 
 
-void Simulation_FinalDCM2ArduinoKalmanCV::FinishUp()
+
+static uint8_t ConvertPWMtoArduinoByte(double PWM)
 {
-	if(outFile != nullptr) {
-		outFile->close();
-		delete outFile;
-		outFile = nullptr;
+	// PWM should be normalized to the range [-1...0...1]
+	
+	/*
+		  1-127 maps to (2 to 254)
+			0   maps to 0
+		128-254 maps to (-1 to -255)
+	*/
+	
+	uint8_t signalByte = 0;
+	
+	if(PWM > 0.000001) {
+		signalByte = static_cast<uint8_t>(physmath::RoundDoubleToUnsignedChar(PWM*127.0));
+	} else if(PWM < -0.000001) {
+		signalByte = static_cast<uint8_t>(physmath::RoundDoubleToUnsignedChar(fabs(PWM)*127.0));
+		if(signalByte > 0) {
+			signalByte += 126;
+		}
 	}
+	
+	return signalByte;
 }
 
 
@@ -127,6 +165,53 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 	simulation_time_elapsed_mytracker += frametime;
 	double requested_PWM = 0.0;
 	
+#if DO_REAL_CV_FOLLOWING
+	double* delaytime = nullptr;
+	CV_PendCart_Measurement* possible_measurement = nullptr;
+	myComputerVisionPendulumFinder.UpdateAndCheckForMeasurement(delaytime,possible_measurement);
+	if(possible_measurement != nullptr) {
+		possible_measurement->timestamp = (simulation_time_elapsed_mytracker - (*delaytime));
+		
+		//cout<<"got this measurement from webcam processor: "<<(*possible_measurement)<<endl;
+		
+		/*my_kalman_filter.GiveMeasurement(*possible_measurement);
+		delete possible_measurement;
+		possible_measurement = nullptr;*/
+		
+		std::vector<CV_PendCart_Measurement> found_measurements;
+		my_pendcart_measurer.GetCompleteStateEstimate(possible_measurement->timestamp,
+														possible_measurement->data.POSMEAS__cartx,
+														possible_measurement->data.POSMEAS__theta,
+														found_measurements);
+		
+#if KALMAN_IS_REALTIME_NOT_EXTRAPOLATED
+		my_kalman_filter._SingleUpdateStep(frametime, possible_measurement, nullptr);
+		my_kalman_filter.ForceClearStatesExceptLatest();
+#else
+		for(int ii=0; ii<found_measurements.size(); ii++)
+		{
+			//std::cout<<"got measurement of type "<<((found_measurements[ii].type) == CV_PendCart_Measurement::positions ? "POSITION" : "VELOCITY")<<" at time "<<(found_measurements[ii].timestamp)<<", with values: "<<found_measurements[ii]<<std::endl;
+			
+			//found_measurements[ii].timestamp = simulation_time_elapsed_mytracker;
+			
+			my_kalman_filter.GiveMeasurement(found_measurements[ii]);
+		}
+#endif
+		
+		delete possible_measurement;
+		possible_measurement = nullptr;
+	}
+#if KALMAN_IS_REALTIME_NOT_EXTRAPOLATED
+	else {
+		my_kalman_filter._SingleUpdateStep(frametime, nullptr, nullptr);
+		my_kalman_filter.ForceClearStatesExceptLatest();
+	}
+#else
+	my_kalman_filter.UpdateToTime(simulation_time_elapsed_mytracker);
+#endif
+	
+#endif
+
 	//arduinoCommunicator.UpdateLEDblinker(frametime);
 	
 #if FULLSTATE_NL_CONTROL
@@ -141,13 +226,18 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 	mypcart->myPhysics->given_control_force_u = (requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
 #else
 #if LQR_SIMULATION
-	cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
-	
+	/*cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
 	latest_LQR_control_PWM = requested_PWM = mycontroller_LQR.GetControl(latestEKFstate, frametime);
-	
 	double lqrControl = requested_PWM * my_pcsys_constants.uscalar;
 	my_kalman_filter._SingleUpdateStep(frametime, nullptr, &lqrControl);
-	my_kalman_filter.ForceClearStatesExceptLatest();
+	my_kalman_filter.ForceClearStatesExceptLatest();*/
+	
+	my_kalman_filter.UpdateToTime(simulation_time_elapsed_mytracker);
+	
+	cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
+	latest_LQR_control_PWM = requested_PWM = mycontroller_LQR.GetControl(latestEKFstate, frametime);
+	double lqrControl = requested_PWM * my_pcsys_constants.uscalar;
+	my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker, lqrControl);
 #endif
 
 
@@ -180,32 +270,22 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 		
 		// inputVal is now normalized to the range [-1...0...1]
 		
-		/*
-			  1-127 maps to (2 to 254)
-			    0   maps to 0
-			128-254 maps to (-1 to -255)
-		*/
+		uint8_t signalByte = ConvertPWMtoArduinoByte(inputVal);
 		
-		uint8_t signalByte = 0;
-		
-		if(inputVal > 0.000001) {
-			signalByte = static_cast<uint8_t>(physmath::RoundDoubleToUnsignedChar(inputVal*127.0));
-		} else if(inputVal < -0.000001) {
-			signalByte = static_cast<uint8_t>(physmath::RoundDoubleToUnsignedChar(fabs(inputVal)*127.0));
-			if(signalByte > 0) {
-				signalByte += 126;
-			}
-		}
-		
-		std::cout<<"u== "<<std::setprecision(4)<<u<<", inputVal == "<<std::setprecision(4)<<inputVal<<", signalByte == "<<((int)signalByte)<<std::endl;
+		//std::cout<<"u== "<<std::setprecision(4)<<u<<", inputVal == "<<std::setprecision(4)<<inputVal<<", signalByte == "<<((int)signalByte)<<std::endl;
 		//std::cout<<"byte sent to Arduino: "<<((int)signalByte)<<std::endl;
 		
 		arduinoCommunicator.SendByte(signalByte);
 		
 		requested_PWM = inputVal;
 	}
+#if DO_REAL_CONTROLLER_BASED_ON_CV
+#else
 	else
+#endif
 	{
+#if ALWAYS_DO_JOYSTICK_CONTROL
+#elif !DO_REAL_CONTROLLER_BASED_ON_CV
 		cv::Mat currState(4,1,CV_64F);
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 		currState.ST_omega = mypcart->get__omega();
@@ -243,7 +323,28 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 		
 		requested_PWM += requested_PWM_swingup*(1.0 - linear_regime_alpha);
 		requested_PWM += mycontroller_position.GetControl(currState, frametime) * (1.0 - linear_regime_alpha);
+#endif
 	}
+#if DO_REAL_CONTROLLER_BASED_ON_CV
+	cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
+	
+	lastlast_LQR_control_PWM = last_LQR_control_PWM;
+	last_LQR_control_PWM = latest_LQR_control_PWM;
+	latest_LQR_control_PWM = requested_PWM = mycontroller_LQR.GetControl(latestEKFstate, frametime);
+	
+	lastlast_LQR_control_counter++;
+	if(lastlast_LQR_control_counter > 3) {
+		last_LQR_signal_actually_sent = (1.0/5.0)*(latest_LQR_control_PWM+last_LQR_control_PWM+lastlast_LQR_control_PWM);
+		if(fabs(last_LQR_signal_actually_sent) > 1.0) {
+			last_LQR_signal_actually_sent /= fabs(last_LQR_signal_actually_sent);
+		}
+		arduinoCommunicator.SendByte(ConvertPWMtoArduinoByte(last_LQR_signal_actually_sent));
+		lastlast_LQR_control_counter = 0;
+		cout<<"sent signal for PWM to Arduino: "<<last_LQR_signal_actually_sent<<endl;
+	}
+	//cout<<"not applying control force to Kalman"<<endl;
+	//my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker, requested_PWM*my_pcsys_constants.uscalar);
+#endif
 	
 	if(fabs(requested_PWM) > 1.0) {
 		requested_PWM /= fabs(requested_PWM);
@@ -253,24 +354,8 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 	
 	mypcart->myPhysics->given_control_force_u = (requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
 #endif
-#if DO_REAL_CV_FOLLOWING
-	cout<<"todo: get measurement from computer vision camera"<<endl;
-#endif
 
 
-
-/*	if(outFile != nullptr) {
-		(*outFile)     << simulation_time_elapsed_mytracker;
-		(*outFile)<<","<< requested_PWM;
-		(*outFile)<<","<< 0.0;
-		(*outFile)<<","<< 0.0;
-		(*outFile)<<","<< mypcart->get__theta();
-		(*outFile)<<","<< mypcart->get__omega();
-		(*outFile)<<","<< mypcart->get__cartx();
-		(*outFile)<<","<< mypcart->get__cartvel();
-		(*outFile)<<","<< 0.0;
-		(*outFile)<<endl;
-	}*/
 #endif
 }
 
@@ -315,11 +400,11 @@ if(text_buffer != nullptr)
 		sprintf____s(text_buffer, "ENERGY: %f",
 					SystemEnergy_GetInternalEnergy(my_pcsys_constants, mypcart->get__theta(), mypcart->get__omega(), mypcart->get__cartx(), mypcart->get__cartvel()));
 	}
-#if LQR_SIMULATION
+#if LQR_SIMULATION or DO_REAL_CV_FOLLOWING
 	else if(line_n == 3) {
 			cv::Mat latest_EKF_state;
 			latest_EKF_state = my_kalman_filter.GetLatestState();
-			sprintf____s(text_buffer, "LQR (theta, omega, x, xdot, PWMDELT): (%5.3f, %5.3f, %5.3f, %5.3f, %1.2f)", latest_EKF_state.ST_theta, latest_EKF_state.ST_omega, latest_EKF_state.ST_cartx, latest_EKF_state.ST_cartx_dot, latest_LQR_control_PWM);
+			sprintf____s(text_buffer, "Kalman (theta, omega, x, xdot, LQR_PWMDELT): (%5.3f, %5.3f, %5.3f, %5.3f, %1.2f)", latest_EKF_state.ST_theta, latest_EKF_state.ST_omega, latest_EKF_state.ST_cartx, latest_EKF_state.ST_cartx_dot, latest_LQR_control_PWM);
 			return true;
 	}
 #endif
@@ -400,7 +485,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::DrawSystemStuff()
 	
 	glEnd();
 	
-#if LQR_SIMULATION
+#if LQR_SIMULATION or DO_REAL_CV_FOLLOWING
 	cv::Mat latest_EKF_state;
 	latest_EKF_state = my_kalman_filter.GetLatestState();
 	

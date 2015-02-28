@@ -3,6 +3,7 @@
 
 #include <opencv2/opencv.hpp>
 #include "PendulumCart_Constants.h"
+#include <iostream>
 
 class CV_PendCart_Measurement
 {
@@ -26,6 +27,11 @@ public:
 																	 type(other.type),
 																	 I_was_simulated(other.I_was_simulated)
 																	 {other.data.copyTo(data);}
+	
+	friend std::ostream& operator<< (std::ostream &out, const CV_PendCart_Measurement &bmeas) {
+		out << "(" << bmeas.data.at<double>(0,0) << ", " << bmeas.data.at<double>(1,0)<< ", timest:"<< bmeas.timestamp << ")";
+		return out;
+	}
 };
 
 class pcstate_class
