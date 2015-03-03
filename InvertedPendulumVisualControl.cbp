@@ -222,10 +222,22 @@
 		<Unit filename="Source/SimplerGameSimSystem.h">
 			<Option virtualFolder="main/" />
 		</Unit>
+		<Unit filename="Source/TestingSimulationFromVideoFile.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/TestingSimulationFromVideoFile.h">
+			<Option virtualFolder="main/" />
+		</Unit>
 		<Unit filename="Source/TryIncludeJPhysics.h">
 			<Option virtualFolder="main/" />
 		</Unit>
 		<Unit filename="Source/Utils/CaseInsensitiveSearch.h">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/Clock.cpp">
+			<Option virtualFolder="Utils/" />
+		</Unit>
+		<Unit filename="Source/Utils/Clock.h">
 			<Option virtualFolder="Utils/" />
 		</Unit>
 		<Unit filename="Source/Utils/MathUtils.cpp">
@@ -286,6 +298,18 @@
 			<Option virtualFolder="Webcam/" />
 		</Unit>
 		<Unit filename="Source/Webcam/ColoredPendOrientationFinder.h">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/FakeWebcamVideoProcessor.cpp">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/FakeWebcamVideoProcessor.h">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/ImageProcessor.cpp">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/ImageProcessor.h">
 			<Option virtualFolder="Webcam/" />
 		</Unit>
 		<Unit filename="Source/Webcam/RealtimeVideoProcessor.cpp">

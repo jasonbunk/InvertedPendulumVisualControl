@@ -20,6 +20,8 @@
 #include "InitSimulations.h"
 #include "FullDemo_Arduino_EKF_CV_Control.h"
 #include "InteractiveNonconvexOptimization.h"
+#include "TestingSimulationFromVideoFile.h"
+#include "SimulationForTesting.h"
 #include <iostream>
 using std::cout; using std::endl;
 
@@ -29,11 +31,20 @@ void StartSimulation(int argc, char** argv)
 	SimplerGameSimSystem * simsys = nullptr;
 	
 	if(argc < 2) {
+		cout<<"starting simulation for testing (simulated pend-cart system)..."<<endl;
+		simsys = new SimulationDCM2Kalman();
+	} else if(atoi(argv[1]) == 0) {
+		cout<<"starting video-based simulation test..."<<endl;
+		simsys = new TestingSimulationFromVideoFile();
+	} else if(atoi(argv[1]) == 1) {
 		cout<<"starting FullDemo_Arduino_EKF_CV_Control..."<<endl;
 		simsys = new Simulation_FinalDCM2ArduinoKalmanCV();
-	} else {
+	} else if(atoi(argv[1]) == 2) {
 		cout<<"starting InteractiveNonconvexOptimization..."<<endl;
 		simsys = new InteractiveNonconvexOptimization();
+	} else if(atoi(argv[1]) == 3) {
+		cout<<"starting simulation for testing (simulated pend-cart system)..."<<endl;
+		simsys = new SimulationDCM2Kalman();
 	}
 	
 	gGameSystem.camera_rotation.Nullify();
@@ -52,3 +63,9 @@ void StartSimulation(int argc, char** argv)
 	}
 	gGameSystem.physics_system = simsys;
 }
+
+
+
+
+
+

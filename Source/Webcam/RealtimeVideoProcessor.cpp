@@ -18,30 +18,72 @@
 */
 #include "RealtimeVideoProcessor.h"
 
+
 void RealtimeVideoProcessor::InitializeNow()
 {
 	DoInitialization();
+	assert(threaded_image_processing == nullptr);
+	threaded_image_processing = new std::thread(&RealtimeVideoProcessor::ThreadMainLoopForProcessingIncomingImagesToMeasurements, this);
 }
 
-void RealtimeVideoProcessor::UpdateAndCheckForMeasurement(double *& possible_returned_delaytime, CV_PendCart_Measurement *& possible_returned_measurement)
+
+void RealtimeVideoProcessor::ThreadMainLoopForProcessingIncomingImagesToMeasurements()
 {
-	possible_returned_delaytime = nullptr;
-	possible_returned_measurement = nullptr;
+	cv::Mat * possible_img;
+	double * possible_returned_delaytime;
+	CV_PendCart_Raw_Measurement * possible_returned_measurement;
 	
-	cv::Mat * possible_img = nullptr;
-	CheckForCapturedImage(possible_returned_delaytime, possible_img);
-	
-	if(possible_returned_delaytime != nullptr && possible_img != nullptr)
+	while(true)
 	{
-		imgProcessingTimer.restart();
+		possible_img = nullptr;
+		possible_returned_delaytime = nullptr;
+		possible_returned_measurement = nullptr;
 		
-		possible_returned_measurement = ProcessImageToMeasurements(possible_img);
-		delete possible_img;
+		CheckForCapturedImage(possible_returned_delaytime, possible_img);
 		
-		(*possible_returned_delaytime) += imgProcessingTimer.getElapsedTime().asSeconds();
-		
-		//std::cout<<"video processing delaytime: "<<(*possible_returned_delaytime)<<std::endl;
+		if(possible_returned_delaytime != nullptr && possible_img != nullptr)
+		{
+			double time_since_last_image_was_processed = imgProcessingTimer.getTimeSinceLastMeasurement();
+			
+			possible_returned_measurement = ProcessImageToMeasurements(possible_img);
+			delete possible_img;
+			
+			if(possible_returned_measurement != nullptr) {
+				possible_returned_measurement->estimated_delay = ((*possible_returned_delaytime) + imgProcessingTimer.getTimeSinceLastMeasurement());
+				
+				recent_measurements_mutex.lock();
+				if(recent_measurements.empty() == false) {
+					for(int ii=0; ii<recent_measurements.size(); ii++) {
+						recent_measurements[ii]->estimated_delay += time_since_last_image_was_processed;
+					}
+				}
+				recent_measurements.push_back(possible_returned_measurement);
+				recent_measurements_mutex.unlock();
+			}
+		}
 	}
+}
+
+
+std::vector<CV_PendCart_Raw_Measurement*>* RealtimeVideoProcessor::UpdateAndCheckForMeasurements()
+{
+	std::vector<CV_PendCart_Raw_Measurement*>* returned = nullptr;
+	
+	recent_measurements_mutex.lock();
+	if(recent_measurements.empty()==false) {
+		returned = new std::vector<CV_PendCart_Raw_Measurement*>();
+		for(int ii=0; ii<recent_measurements.size(); ii++) {
+			returned->push_back(recent_measurements[ii]); //return them in order (monotonically increasing times)
+			
+			assert(isnan(returned->back()->estimated_delay)==false);
+			assert(isnan(returned->back()->cartx)==false);
+			assert(isnan(returned->back()->theta)==false);
+		}
+		recent_measurements.clear();
+	}
+	recent_measurements_mutex.unlock();
+	
+	return returned;
 }
 
 

@@ -34,21 +34,26 @@
 void SynchedKF_PendCartDCM2::Initialize(double initial_timestamp, cv::Mat initial_xvec, PendulumCartDCM2_Constants system_params)
 {
 	pcsys = system_params;
-	fixed_time_step = 0.003; // (1/50) of (1/8) of a second
+	fixed_time_step = 0.002; // (1/50) of (1/8) of a second
 	length_of_time_of_history_to_save = 0.3;//0.280; //up to 0.280 seconds into the past, or 112 points
 //----------------------------------------
 	state_history.clear();
 	controlforce_history.clear();
 	measurements_history.clear();
+	//state_history_is_sorted = true;
+	controlforce_history_is_sorted = true;
+	measurements_history_is_sorted = true;
 	
-	state_history.push_back(pcstate_class());
-	state_history.back().timestamp = initial_timestamp;
+	state_history.push_back(new pcstate_class());
+	state_history.back()->timestamp = initial_timestamp;
 	
-	initial_xvec.copyTo(state_history.back().xvec);
+	initial_xvec.copyTo(state_history.back()->xvec);
 //----------------------------------------
 	//uncertain of initial position
-	state_history.back().Pmat = (cv::Mat::eye(4,4,CV_64F)*10.0*pcsys.theta_measurement_noise_stddev
+	state_history.back()->Pmat = (cv::Mat::eye(4,4,CV_64F)*10.0*pcsys.theta_measurement_noise_stddev
 									*10.0*pcsys.cart_x_measurement_noise_stddev);
+	
+	SubclassInitialize();
 }
 
 //=====================================================================================================
@@ -59,7 +64,7 @@ void SynchedKF_General::KeepHistoryUpToThisTime(double last_time_to_keep)
 {
 	SortDataByTimestamps();
 	
-	double latest_time = state_history.back().timestamp;
+	double latest_time = state_history.back()->timestamp;
 	if(measurements_history.empty()==false) {
 		if(latest_time < measurements_history.back().timestamp) {
 			latest_time = measurements_history.back().timestamp;
@@ -73,10 +78,10 @@ void SynchedKF_General::KeepHistoryUpToThisTime(double last_time_to_keep)
 	//std::cout<<"KeepHistoryUpToThisTime("<<last_time_to_keep<<")"<<std::flush<<std::endl;
 	
 	
-	if(state_history.size() > 1 && state_history.front().timestamp < last_time_to_keep) {
-		std::deque<pcstate_class>::iterator it = state_history.begin();
+	if(state_history.size() > 1 && state_history.front()->timestamp < last_time_to_keep) {
+		std::deque<pcstate_class*>::iterator it = state_history.begin();
 		for(; it != state_history.end(); it++) {
-			if(it->timestamp >= last_time_to_keep) break;
+			if((*it)->timestamp >= last_time_to_keep) break;
 		}
 		if(it == state_history.end()){it--;} //always keep at least one
 		state_history.erase(state_history.begin(), it);
@@ -106,33 +111,47 @@ void SynchedKF_General::SortDataByTimestamps()
 	//sort to ascending order (earliest times first, latest times last)
 	//also eliminate stuff so we only keep up to a certain amount of time in the past
 	
-	std::sort(state_history.begin(), state_history.end(), pcstate_class::SortByTimestamp);
-	std::sort(controlforce_history.begin(), controlforce_history.end(), controlforce_class::SortByTimestamp);
-	std::sort(measurements_history.begin(), measurements_history.end(), CV_PendCart_Measurement::SortByTimestamp);
+	//std::sort(state_history.begin(), state_history.end(), pcstate_class::SortByTimestamp);
+	
+	if(controlforce_history_is_sorted == false) {
+		std::sort(controlforce_history.begin(), controlforce_history.end(), controlforce_class::SortByTimestamp);
+		controlforce_history_is_sorted = true;
+	}
+	if(measurements_history_is_sorted == false) {
+		std::sort(measurements_history.begin(), measurements_history.end(), CV_PendCart_Measurement::SortByTimestamp);
+		measurements_history_is_sorted = true;
+	}
 }
 
 cv::Mat SynchedKF_General::GetLatestState()
 {
 	SortDataByTimestamps();
 	cv::Mat retval;
-	state_history.back().xvec.copyTo(retval);
+	state_history.back()->xvec.copyTo(retval);
 	return retval;
 }
 
 void SynchedKF_General::GiveMeasurement(const CV_PendCart_Measurement & new_measurement)
 {
 	//uncomment this when it won't cause a problem when uncommented
-	if(new_measurement.timestamp >= (state_history.back().timestamp - length_of_time_of_history_to_save)) {
+	if(new_measurement.timestamp >= (state_history.back()->timestamp - length_of_time_of_history_to_save))
+	{
+		if(measurements_history.empty()==false && new_measurement.timestamp < measurements_history.back().timestamp) {
+			measurements_history_is_sorted = false; //this will be placed out of order
+		}
 		measurements_history.push_back(new_measurement);
 		measurements_history.back().I_was_simulated = false;
-		SortDataByTimestamps();
 	}
 }
 
 void SynchedKF_General::ApplyControlForce(double timestamp, double current_control_force_u)
 {
 	//uncomment this when it won't cause a problem when uncommented
-	if(timestamp >= (state_history.back().timestamp - length_of_time_of_history_to_save)) {
+	if(timestamp >= (state_history.back()->timestamp - length_of_time_of_history_to_save))
+	{
+		if(controlforce_history.empty()==false && timestamp < controlforce_history.back().timestamp) {
+			controlforce_history_is_sorted = false; //this will be placed out of order
+		}
 		controlforce_history.push_back(controlforce_class());
 		controlforce_history.back().timestamp = timestamp;
 		controlforce_history.back().I_was_simulated = false;
@@ -176,7 +195,7 @@ void SynchedKF_General::UpdateToTime(double given_current_time)
 	assert(state_history.empty() == false);
 	
 	SortDataByTimestamps();
-	double latest_kalman_time = state_history.back().timestamp;
+	double latest_kalman_time = state_history.back()->timestamp;
 	
 	
 #if TALK_WHEN_UPDATING
@@ -204,8 +223,8 @@ void SynchedKF_General::UpdateToTime(double given_current_time)
 	{
 		std::cout<<"starting fresh, new measurement received after a timeout"<<std::endl;
 		KeepHistoryUpToThisTime(given_current_time - latest_kalman_time); //erase most but latest time(s)
-		state_history.back().timestamp = latest_kalman_time = (given_current_time - length_of_time_of_history_to_save);
-		state_history.back().Pmat = cv::Mat::eye(4,4,CV_64F) * 1.0;
+		state_history.back()->timestamp = latest_kalman_time = (given_current_time - length_of_time_of_history_to_save);
+		state_history.back()->Pmat = cv::Mat::eye(4,4,CV_64F) * 1.0;
 	}
 	
 //==========================================================================
@@ -249,18 +268,18 @@ void SynchedKF_General::UpdateToTime(double given_current_time)
 		std::cout<<"KF trying to rewind from time: "<<latest_kalman_time<<" to: "<<rewind_to_this_time<<std::endl;
 #endif
 		bool erasesomething = false;
-		std::deque<pcstate_class>::iterator it = state_history.begin();
+		std::deque<pcstate_class*>::iterator it = state_history.begin();
 		for(; it != state_history.end(); it++) {
-			if((rewind_to_this_time - (it->timestamp)) < (fixed_time_step*0.50001)) {
+			if((rewind_to_this_time - ((*it)->timestamp)) < (fixed_time_step*0.50001)) {
 				erasesomething = true;
 				break;
 			}
 		}
 		if(erasesomething && it != state_history.end()) {
 			if(it == state_history.begin()) {
-				if((state_history.back().timestamp - rewind_to_this_time) < length_of_time_of_history_to_save) {
+				if((state_history.back()->timestamp - rewind_to_this_time) < length_of_time_of_history_to_save) {
 					std::cout<<"SynchedKF has no history as far back as time "<<rewind_to_this_time<<" when a measurement or control input was given, so restarting sim to that time"<<std::endl;
-					it->timestamp = rewind_to_this_time;
+					(*it)->timestamp = rewind_to_this_time;
 				} else {
 					std::cout<<"#######################ERROR##########################\n\tSynchedKF wanted to rewind to an invalid time???"<<std::flush<<std::endl;
 				}
@@ -271,7 +290,7 @@ void SynchedKF_General::UpdateToTime(double given_current_time)
 		assert(state_history.empty() == false);
 		
 		//round to the now-latest end of the state history
-		rewind_to_this_time = state_history.back().timestamp;
+		rewind_to_this_time = state_history.back()->timestamp;
 		
 		// mark everything after this now-current time as "unsimulated"
 		for(int ii=0; ii<controlforce_history.size(); ii++) {
@@ -287,15 +306,15 @@ void SynchedKF_General::UpdateToTime(double given_current_time)
 	}
 	
 #if TALK_WHEN_UPDATING
-	std::cout<<"KF stepping from time: "<<(state_history.back().timestamp)<<" to time: "<<given_current_time<<" using timestep: "<<fixed_time_step<<std::endl;
+	std::cout<<"KF stepping from time: "<<(state_history.back()->timestamp)<<" to time: "<<given_current_time<<" using timestep: "<<fixed_time_step<<std::endl;
 #endif
 	
 	CV_PendCart_Measurement * possible_measurement;
 	double * possible_controlforce;
-	while( (given_current_time - state_history.back().timestamp) > (fixed_time_step*0.5) ) {
+	while( (given_current_time - state_history.back()->timestamp) > (fixed_time_step*0.5) ) {
 		possible_measurement = nullptr;
 		possible_controlforce = nullptr;
-		CheckForMeasurementsAtTime(state_history.back().timestamp, possible_measurement, possible_controlforce);
+		CheckForMeasurementsAtTime(state_history.back()->timestamp, possible_measurement, possible_controlforce);
 		_SingleUpdateStep(fixed_time_step, possible_measurement, possible_controlforce);
 	}
 }

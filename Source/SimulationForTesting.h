@@ -1,5 +1,5 @@
-#ifndef ___FINAL_DCM2_ARDUINO_KALMAN_OPENCV_H____
-#define ___FINAL_DCM2_ARDUINO_KALMAN_OPENCV_H____
+#ifndef ___SIMULATION_FOR_TESTING_H____
+#define ___SIMULATION_FOR_TESTING_H____
 
 
 #include "SimplerGameSimSystem.h"
@@ -12,13 +12,10 @@
 
 #include "EstimationAndControl/EKF/DCMotor_PendCart_EKF.h"
 
-#include "Webcam/ColoredPendOrientationFinder.h"
-
-#include "Arduino/ArduinoCommsInterface.h"
+#include "Webcam/SimulationSnapshotsSimulatingWebcam.h"
 
 
-
-class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
+class SimulationDCM2Kalman : public SimplerGameSimSystem
 {
 	PendulumCartDCM2_Constants my_pcsys_constants;
 	
@@ -30,7 +27,6 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	
 	double keyboard_PWM_requested_saved;
 	double debugging_last_linearized_control_PWM;
-	
 	
 	CV_PendCart_Measurer my_pendcart_measurer;
 	dcmotor_pendcart_EKF  my_kalman_filter;
@@ -46,10 +42,8 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	nonlinear_swingup_optimal_controller   mycontroller_nlswing;
 	dcm2_pc_position_controller_pid   mycontroller_position;
 	dcm2_controller_savedhumanreplay mycontroller_replay;
-
-	ColoredPendOrientationFinder myComputerVisionPendulumFinder;
 	
-	ArduinoSerialComm arduinoCommunicator;
+	SimulationSnapshotsSimulatingWebcam myComputerVisionPendulumFinder;
 	
 	RNG_rand_r rand_device;
 	phys::dcmotor22_pendcart * mypcart;
@@ -58,8 +52,8 @@ public:
 	double SimulatedMeasurePendulumTheta() {return mypcart->positions[0].y;}
 	double SimulatedMeasureCartX() {return mypcart->positions[0].x;}
 	
-	Simulation_FinalDCM2ArduinoKalmanCV() : SimplerGameSimSystem(), mypcart(nullptr) {}
-	~Simulation_FinalDCM2ArduinoKalmanCV() {}
+	SimulationDCM2Kalman() : SimplerGameSimSystem(), mypcart(nullptr) {}
+	~SimulationDCM2Kalman() {}
 	
 	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
 	

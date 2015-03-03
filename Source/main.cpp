@@ -35,9 +35,16 @@ using std::cout; using std::endl;
 #define RENDERED_FONT_SIZE_FPS_AND_INFO 13.0f
 
 
+#define USE_SIMULATED_TIMER 1
+
 //-------------------------------------------------------------
 #include "TryIncludeJPhysics.h" //for timer
+#if USE_SIMULATED_TIMER
+#include "Utils/Clock.h"
+myclock mytimer;
+#else
 TIMER mytimer;
+#endif
 #include <list>
 #include <time.h>
 std::list<double> frameTimes(11, 1.0);
@@ -95,8 +102,12 @@ void myMouseMotionFunc( int x, int y )	//called both for MotionFunc and PassiveM
 
 void updatePhysics(void)
 {
+#if USE_SIMULATED_TIMER
+	DTIME = mytimer.getTimeSinceLastMeasurement();
+#else
 	DTIME = mytimer.seconds();
 	mytimer.reset();
+#endif
 
 	frameTimes.pop_front();
 	frameTimes.push_back(DTIME);
@@ -377,6 +388,10 @@ int main(int argc, char** argv)
 	cout<<"Status: Using GLEW "<<phys::to_string(glewGetString(GLEW_VERSION))<<endl;
 #endif
 
+#if USE_SIMULATED_TIMER
+	//mytimer.fixed_time_step___if_less_than_zero_all_clocks_are_realtime = 0.01;
+	mytimer.restart();
+#endif
 	StartSimulation(argc, argv);
 
 

@@ -33,9 +33,9 @@ static const double TRACK_LIMITS_SIM_BOUNDS = 1000.0;
 /*extern*/ double PRINTER_CONTROL_SCALAR_U = 5.5; //experimental estimate at 10 volts
 												//is about 7.0 at 12 volts
 
-static const double PENDLEN = (14.0+(3.0/8.0)) * 2.54*0.01;
-static const double PENDWID = ( 1.0+(1.0/16.0))* 2.54*0.01;
-static const double PENDMASS= 0.0262;
+//static const double PENDLEN = (14.0+(3.0/8.0)) * 2.54*0.01;
+//static const double PENDWID = ( 1.0+(1.0/16.0))* 2.54*0.01;
+//static const double PENDMASS= 0.0262;
 
 static const double MASS_OF_INK_CARTRIDGE_AND_BOLT = 0.060;
 static const double CARTMASS = 0.074 + MASS_OF_INK_CARTRIDGE_AND_BOLT + 0.0037;
@@ -56,9 +56,16 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     
     consts.g = 9.81;
     
-    consts.m = PENDMASS;
-    consts.Ipc = PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
-    consts.l = 0.5 * PENDLEN;
+//----------------------------------------
+    consts.m = 0.051; //approx. 51 grams
+    
+  //consts.Ipc = 0.000292664 == PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
+    
+    consts.Ipc = 0.000655406;
+    
+    consts.l = 0.2657;
+//----------------------------------------
+    
     consts.kp = frictionless ? 0.0 : 0.004;
     
     consts.MC = (CARTMASS + MOTOREQUIVALENTMASS);

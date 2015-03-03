@@ -21,25 +21,18 @@
 */
 
 #include <stdint.h>
-#include <AFMotor.h>
-
-// note: using the motor shield requires the following digital pins:
-// pin 11 for DC-motor-1, pin 3 for DC-motor-2, pin 5 for DC-motor-3, pin 6 for DC-motor-4
-// pins 4,7,8,12 when any DC motor is used
-// this means if we use DC motor 3 on the shield,
-//       we can mess with timer1 or timer2 which mess with the PWM clocks of the pins we're not using: 9,10 and 3,11 (resp.)
-
 
 /*==========================================================================================
   USER SETTINGS
 */
 
-// Initialize the motor on the shield's DC-motor-3 attachment
-AF_DCMotor mymotor(3, MOTOR34_8KHZ);
-
 // Pins for reading (digital) from linear encoder
 #define LinearEncoderPinA  2
 #define LinearEncoderPinB  13
+
+#define OutputPinTooFarRight 8
+#define OutputPinTooFarLeft 12
+
 
 // How close to the sides of the track should the cart be allowed to go?
 // note: printer encoder strip has approx. 200 steps/cm
@@ -52,7 +45,7 @@ const int AllowedStepsFromTrackEdge = 400;
 #define BITS_FOR_ENCODER_CHANGE_DETECT  3
 
 //how often to read the linear encoder... in microseconds
-#define INTERRUPT_TIMER_PERIOD_MICROSECONDS  40
+#define INTERRUPT_TIMER_PERIOD_MICROSECONDS  45
 
 /*==========================================================================================
   DYNAMIC VARIABLES (NOT USER SETTINGS)
@@ -79,16 +72,10 @@ uint8_t LinearEncoderPinA_ReadHistory = 0;
 uint8_t LinearEncoderPinB_ReadHistory = 0;
 
 /*
-  Variables used by main loop for motor control and serial reading
-*/
-int SerialLastReadVal;
-int LastSetMotorSpeed = 0;
-int NewMotorSpeed = 0;
-
-/*
   Digital reads will be as easy as AND'ing these pin bits with their PIN register
   To change the pins used, look above (near the beginning of this file)
 */
+uint8_t PinTooFarRight_bit, PinTooFarLeft_bit;
 uint8_t PinA_bit, PinB_bit;
 #if LinearEncoderPinA <= 7
 #define PINREGISTER_FOR_PIN_A PIND
@@ -102,6 +89,16 @@ uint8_t PinA_bit, PinB_bit;
 #endif
 //note: register PIND is for pins 0-7, register PINB is for pins 8-13
 
+#if OutputPinTooFarRight <= 7
+#define PINREGISTER_WRITE_FOR_PIN_RIGHT PORTD
+#else
+#define PINREGISTER_WRITE_FOR_PIN_RIGHT PORTB
+#endif
+#if OutputPinTooFarLeft <= 7
+#define PINREGISTER_WRITE_FOR_PIN_LEFT PORTD
+#else
+#define PINREGISTER_WRITE_FOR_PIN_LEFT PORTB
+#endif
 
 /*==========================================================================================
   ADDITIONAL FUNCTIONS
@@ -136,9 +133,68 @@ uint8_t SetDirectPortAccessPin_WRITE(uint8_t pin) {
 
 
 /*==========================================================================================
-  Fast scheduled ISR for linear encoder reading and signal processing
+  SETUP
 */
-ISR(TIMER1_COMPA_vect)
+void setup()
+{
+  Serial.begin(115200);
+  
+  //pinMode(LinearEncoderPinA, INPUT);
+  //pinMode(LinearEncoderPinB, INPUT);
+  
+  pinMode(OutputPinTooFarRight, OUTPUT);
+  pinMode(OutputPinTooFarLeft,  OUTPUT);
+  
+  noInterrupts(); //disable interrupts
+  
+  PinA_bit = SetDirectPortAccessPin_READ(LinearEncoderPinA);
+  PinB_bit = SetDirectPortAccessPin_READ(LinearEncoderPinB);
+  
+  PinTooFarRight_bit = SetDirectPortAccessPin_WRITE(OutputPinTooFarRight);
+  PinTooFarLeft_bit = SetDirectPortAccessPin_WRITE(OutputPinTooFarLeft);
+  
+#if 1
+  // Use Timer1 for timer interrupt
+  
+  TCCR1A = 0; //clear this entire register
+  TCCR1B = 0; //clear this entire register
+  
+  // compare match register -- what value to trigger timer counter interrupt on
+  //    since prescalar is 1x, each count is (1/16) microseconds
+  OCR1A = (INTERRUPT_TIMER_PERIOD_MICROSECONDS * 16);
+  
+  TCCR1B |= (1 << WGM12);   // CTC mode (_Clear _Timer counter TCNT1 on _Compare match TCNT1 == OCR1A)
+  TCCR1B |= (1 << CS10);    // 1x prescaler (see ATMega328P documentation page 137)
+  TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
+  
+  TCNT1  = 0; //initialize timer counter value to 0
+#else
+/*
+  // Use Timer2 for timer interrupt (if you use this, you need to change the ISR(TIMER_ vector declaration above
+
+  TCCR2A = 0; //clear this entire register
+  TCCR2B = 0; //clear this entire register
+  
+  // compare match register -- what value to trigger timer counter interrupt on
+  //    since prescalar is 1x, each count is (1/16) microseconds
+  OCR2A = 255;
+  
+  TCCR2A |= (1 << WGM21);   // CTC mode (_Clear _Timer counter on _Compare match)
+  TCCR2B |= (1 << CS20);    // 1x prescaler (see ATMega328P documentation page 137)
+  TIMSK2 |= (1 << OCIE2A);  // enable timer compare interrupt
+  
+  TCNT2  = 0; //initialize timer counter value to 0
+*/
+#endif
+  
+  interrupts(); //re-enable interrupts
+}
+
+
+/*==========================================================================================
+  MAIN LOOP
+*/
+void loop()
 {
   //----------------------------
   // Read latest (set rightmost bit to latest) and push back the history (left shift everything else)
@@ -188,48 +244,7 @@ ISR(TIMER1_COMPA_vect)
     }
     LinearEncoderPinB_State = 1;
   }
-}
-
-
-/*==========================================================================================
-  SETUP
-*/
-void setup()
-{
-  Serial.begin(115200);
-  mymotor.run(RELEASE);
-  LastSetMotorSpeed = 0;
   
-  //pinMode(LinearEncoderPinA, INPUT);
-  //pinMode(LinearEncoderPinB, INPUT);
-  
-  noInterrupts(); //disable interrupts
-  
-  PinA_bit = SetDirectPortAccessPin_READ(LinearEncoderPinA);
-  PinB_bit = SetDirectPortAccessPin_READ(LinearEncoderPinB);
-  
-  TCCR1A = 0; //clear this entire register
-  TCCR1B = 0; //clear this entire register
-  
-  // compare match register -- what value to trigger timer counter interrupt on
-  //    since prescalar is 1x, each count is (1/16) microseconds
-  OCR1A = (INTERRUPT_TIMER_PERIOD_MICROSECONDS*16);
-  
-  TCCR1B |= (1 << WGM12);   // CTC mode (_Clear _Timer counter TCNT1 on _Compare match TCNT1 == OCR1A)
-  TCCR1B |= (1 << CS10);    // 1x prescaler (see ATMega328P documentation page 137)
-  TIMSK1 |= (1 << OCIE1A);  // enable timer compare interrupt
-  
-  TCNT1  = 0; //initialize timer counter value to 0
-  
-  interrupts(); //re-enable interrupts
-}
-
-
-/*==========================================================================================
-  MAIN LOOP
-*/
-void loop()
-{
   //----------------------------
   // Expand max/min positions; to calibrate this, sweep cart fully side-to-side after an Arduino reset
   //
@@ -243,48 +258,18 @@ void loop()
   //----------------------------
   // Print current position to serial; this should be commented out when not needed
   //
-  //Serial.println(LinearEncoderCurrPosition, DEC);
+  Serial.println(LinearEncoderCurrPosition, DEC);
   
-  //----------------------------
-  // Receive motor inputs and drive results
-  //
-  if(Serial.available())
-  {
-    SerialLastReadVal = Serial.read();
-    NewMotorSpeed = 0;
-    
-    //convert byte to range (-1...0...1) as specified by the C++ code sending the signal
-    if(SerialLastReadVal > 0 && SerialLastReadVal < 128) {
-      NewMotorSpeed = (SerialLastReadVal*2);
-    } else if(SerialLastReadVal > 127) {
-      NewMotorSpeed = (SerialLastReadVal-127)*(-2);
-    }
-    
-    //refuse movements that would cause the cart to slam into the sides
-    if(LinearEncoderCurrPosition > (LinearEncoderMaximumPositionSeen-AllowedStepsFromTrackEdge) && NewMotorSpeed > 0) {
-      NewMotorSpeed = 0;
-    }
-    if(LinearEncoderCurrPosition < (LinearEncoderMinimumPositionSeen+AllowedStepsFromTrackEdge) && NewMotorSpeed < 0) {
-      NewMotorSpeed = 0;
-    }
-    
-    //check if the motor speed is different than what the motor already is
-    if(NewMotorSpeed != LastSetMotorSpeed)
-    {
-      LastSetMotorSpeed = NewMotorSpeed;
-      //now actually set the motor speed -- the sign (+/-) indicates direction
-      if(NewMotorSpeed > 0) {
-        mymotor.run(FORWARD);
-        mymotor.setSpeed(NewMotorSpeed > 255 ? 255 : NewMotorSpeed);
-      }
-      else if(NewMotorSpeed < 0) {
-        NewMotorSpeed = abs(NewMotorSpeed);
-        mymotor.run(BACKWARD);
-        mymotor.setSpeed(NewMotorSpeed > 255 ? 255 : NewMotorSpeed);
-      } else {
-        mymotor.run(RELEASE);
-      }
-    }
+  if(LinearEncoderCurrPosition > (LinearEncoderMaximumPositionSeen - AllowedStepsFromTrackEdge)) {
+    digitalWrite(OutputPinTooFarRight, HIGH);
+  } else {
+    digitalWrite(OutputPinTooFarRight, LOW);
+  }
+  
+  if(LinearEncoderCurrPosition < (LinearEncoderMinimumPositionSeen + AllowedStepsFromTrackEdge)) {
+    digitalWrite(OutputPinTooFarLeft, HIGH);
+  } else {
+    digitalWrite(OutputPinTooFarLeft, LOW);
   }
   
   delay(1); //since we are using timed interrupt for linear encoder reading, we can comfortably wait here

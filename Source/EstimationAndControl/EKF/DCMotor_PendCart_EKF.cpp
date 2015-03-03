@@ -31,13 +31,28 @@ static int exit_counter_when_reached = 4;
 
 
 
+dcmotor_pendcart_EKF::dcmotor_pendcart_EKF() : SynchedKF_PendCartDCM2(),
+		max_reasonable_measurement_ytilda__theta(1e6),
+		max_reasonable_measurement_ytilda__omega(1e6),
+		max_reasonable_measurement_ytilda__cartx(1e6),
+		max_reasonable_measurement_ytilda__cartv(1e6),
+		num_recent_ytildas_to_consider(3) {}
+
+void dcmotor_pendcart_EKF::SubclassInitialize()
+{
+	ExperimentalGetFmatLinearized(fixed_time_step);
+}
+
+#define MEDIAN_OF_THREE(aa,bb,cc) std::max(std::min(aa,bb), std::min(std::max(aa,bb),cc))
+
+
 void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement * possibly_given_measurement, double * possibly_given_control_u) 
 {
 #if TALK_WHEN_UPDATING
 	std::cout<<"---------------------------------"<<std::endl;
 #endif
 	SortDataByTimestamps();
-	const double curr_sim_time = state_history.back().timestamp;
+	const double curr_sim_time = state_history.back()->timestamp;
 	
 	double current_control_u = 0.0;
 	if(possibly_given_control_u != nullptr) {
@@ -49,15 +64,15 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	
 	// calculate matrices
 	//
-	cv::Mat Fkm1_J(GetJacobianFmat(dt, state_history.back().xvec, current_control_u));
-	cv::Mat Fkm1_J_T;
-	cv::transpose(Fkm1_J, Fkm1_J_T);
-	cv::Mat Qkm1(GetQmat(dt, state_history.back().xvec));
+	//cv::Mat Fkm1_J(GetJacobianFmat(dt, state_history.back()->xvec, current_control_u));
+	//cv::Mat Fkm1_J_T;
+	//cv::transpose(Fkm1_J, Fkm1_J_T);
+	//cv::Mat Qkm1(GetQmat(dt, state_history.back()->xvec));
 	
 	
 	// predicted states
 	//
-	cv::Mat x_k_km1  =  function_step_time_xvec(dt, state_history.back().xvec, current_control_u);
+	cv::Mat x_k_km1  =  function_step_time_xvec(dt, state_history.back()->xvec, current_control_u);
 	//cv::Mat x_k_km1  =  Fkm1_J * state_history.back().xvec; //works for small angles
 	
 	//for LQR testing
@@ -74,17 +89,17 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	
 	
 	
-	cv::Mat P_k_km1  =  Fkm1_J*(state_history.back().Pmat)*Fkm1_J_T + Qkm1;
+	cv::Mat P_k_km1  =  state_history.back()->Pmat;//Fkm1_J*(state_history.back().Pmat)*Fkm1_J_T + Qkm1;
 	
 	//======================================================================================
 	// Update (if measurement is available)
 	//
 	if(possibly_given_measurement == nullptr)
 	{
-		state_history.push_back(pcstate_class());
-		state_history.back().timestamp = (curr_sim_time + dt);
-		x_k_km1.copyTo(state_history.back().xvec);
-		P_k_km1.copyTo(state_history.back().Pmat);
+		state_history.push_back(new pcstate_class());
+		state_history.back()->timestamp = (curr_sim_time + dt);
+		x_k_km1.copyTo(state_history.back()->xvec);
+		P_k_km1.copyTo(state_history.back()->Pmat);
 	}
 	else
 	{
@@ -106,14 +121,18 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 		cv::Mat HkT;
 		cv::transpose(Hk, HkT);
 		
+		cv::Mat Hk_times_xkkm1(Hk*x_k_km1);
 		/*
 			Calculate measurement residual: (measurement) - (model prediction)
 		*/
-		cv::Mat ytilda = (possibly_given_measurement->data) - Hk*x_k_km1;
+		cv::Mat ytilda = (possibly_given_measurement->data) - Hk_times_xkkm1;
 		
-		cv::Mat Sk = (Hk*P_k_km1*HkT) + Rmat;
+		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
+			ytilda.POSMEAS__theta = physmath::differenceBetweenAnglesSigned(possibly_given_measurement->data.POSMEAS__theta, Hk_times_xkkm1.POSMEAS__theta);
+		}
 		
 #if 0
+		cv::Mat Sk = (Hk*P_k_km1*HkT) + Rmat;
 		cv::Mat Sk_inverted;
 		double checksingular = cv::invert(Sk, Sk_inverted); //must be invertible
 		assert(checksingular != 0.0);
@@ -128,39 +147,51 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 		cv::Mat Kk = cv::Mat::zeros(4,2,CV_64F);
 		
 		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
-			Kk.at<double>(0,0) = 0.9;
-			Kk.at<double>(2,1) = 0.9;
+			Kk.at<double>(0,0) = 0.6;
+			Kk.at<double>(2,1) = 0.6;
 			
-			if(fabs(ytilda.POSMEAS__theta) > max_reasonable_measurement_ytilda__theta
-			|| fabs(ytilda.POSMEAS__cartx) > max_reasonable_measurement_ytilda__cartx)
-			{
-				//ytilda = cv::Mat::zeros(2,1,CV_64F);
+			last_few_ytilda_theta.push_back(fabs(ytilda.POSMEAS__theta)); //use absolute value, for deviation distance
+			last_few_ytilda_cartx.push_back(fabs(ytilda.POSMEAS__cartx));
+			
+			assert(num_recent_ytildas_to_consider == 3); //we'll use a formula for 3 element lists
+			
+			if(last_few_ytilda_theta.size() > num_recent_ytildas_to_consider) {
+				last_few_ytilda_theta.pop_front();
+				last_few_ytilda_cartx.pop_front();
 				
-				cout<<"POS meas. was unreasonable? original ytilda: "<<ytilda;
+				double median_ytilda_theta = MEDIAN_OF_THREE(last_few_ytilda_theta[0], last_few_ytilda_theta[1], last_few_ytilda_theta[2]) + 1e-9;
+				double median_ytilda_cartx = MEDIAN_OF_THREE(last_few_ytilda_cartx[0], last_few_ytilda_cartx[1], last_few_ytilda_cartx[2]) + 1e-9;
 				
-				double ytildalen = sqrt((ytilda.POSMEAS__theta*ytilda.POSMEAS__theta) + (ytilda.POSMEAS__cartx*ytilda.POSMEAS__cartx));
-				ytilda /= ytildalen;
-				ytilda *= 0.001;
-				
-				cout<<", new ytilda: "<<ytilda<<endl;
+				if(fabs(ytilda.POSMEAS__theta / median_ytilda_theta) > max_reasonable_measurement_ytilda__theta
+				|| fabs(ytilda.POSMEAS__cartx / median_ytilda_cartx) > max_reasonable_measurement_ytilda__cartx)
+				{
+					cout<<"POS meas. was unreasonable? orig ytilda: "<<ytilda<<", model state: "<<(Hk*x_k_km1)<<", meas.: "<<(possibly_given_measurement->data)<<endl;
+					ytilda *= 0.0;
+				}
 			}
 		
 		} else if(possibly_given_measurement->type == CV_PendCart_Measurement::velocities) {
-			Kk.at<double>(1,0) = 0.1;
-			Kk.at<double>(3,1) = 0.1;
+			Kk.at<double>(1,0) = 0.08;
+			Kk.at<double>(3,1) = 0.08;
 			
-			if(fabs(ytilda.VELMEAS__omega) > max_reasonable_measurement_ytilda__omega
-			|| fabs(ytilda.VELMEAS__cartv) > max_reasonable_measurement_ytilda__cartv)
-			{
-				//ytilda = cv::Mat::zeros(2,1,CV_64F);
+			last_few_ytilda_omega.push_back(fabs(ytilda.VELMEAS__omega)); //use absolute value, for deviation distance
+			last_few_ytilda_cartv.push_back(fabs(ytilda.VELMEAS__cartv));
+			
+			assert(num_recent_ytildas_to_consider == 3); //we'll use a formula for 3 element lists
+			
+			if(last_few_ytilda_omega.size() > num_recent_ytildas_to_consider) {
+				last_few_ytilda_omega.pop_front();
+				last_few_ytilda_cartv.pop_front();
 				
-				cout<<"VEL meas. was unreasonable? original ytilda: "<<ytilda;
+				double median_ytilda_omega = MEDIAN_OF_THREE(last_few_ytilda_omega[0], last_few_ytilda_omega[1], last_few_ytilda_omega[2]) + 1e-9;
+				double median_ytilda_cartv = MEDIAN_OF_THREE(last_few_ytilda_cartv[0], last_few_ytilda_cartv[1], last_few_ytilda_cartv[2]) + 1e-9;
 				
-				double ytildalen = sqrt((ytilda.POSMEAS__theta*ytilda.POSMEAS__theta) + (ytilda.POSMEAS__cartx*ytilda.POSMEAS__cartx));
-				ytilda /= ytildalen;
-				ytilda *= 0.001;
-				
-				cout<<", new ytilda: "<<ytilda<<endl;
+				if(fabs(ytilda.VELMEAS__omega / median_ytilda_omega) > max_reasonable_measurement_ytilda__omega
+				|| fabs(ytilda.VELMEAS__cartv / median_ytilda_cartv) > max_reasonable_measurement_ytilda__cartv)
+				{
+					cout<<"VEL meas. was unreasonable? orig ytilda: "<<ytilda<<", model state: "<<(Hk*x_k_km1)<<", meas.: "<<(possibly_given_measurement->data)<<endl;
+					ytilda *= 0.0;
+				}
 			}
 		}
 		
@@ -172,21 +203,21 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 		cv::Mat x_k_k = x_k_km1 + (Kk*ytilda);
 		cv::Mat P_k_k = (cv::Mat::eye(4,4,CV_64F) - (Kk*Hk))*P_k_km1;
 		
-		state_history.push_back(pcstate_class());
-		state_history.back().timestamp = (curr_sim_time + dt);
-		x_k_k.copyTo(state_history.back().xvec);
-		P_k_k.copyTo(state_history.back().Pmat);
+		state_history.push_back(new pcstate_class());
+		state_history.back()->timestamp = (curr_sim_time + dt);
+		x_k_k.copyTo(state_history.back()->xvec);
+		P_k_k.copyTo(state_history.back()->Pmat);
 	}
 #if TALK_WHEN_UPDATING
 #ifndef ONLY_TALK_FOR_KGAIN
-	std::cout<<"Pmat:"<<state_history.back().Pmat<<std::endl;
-	std::cout<<"xvec:"<<state_history.back().xvec<<std::endl;
+	std::cout<<"Pmat:"<<state_history.back()->Pmat<<std::endl;
+	std::cout<<"xvec:"<<state_history.back()->xvec<<std::endl;
 #endif
 #endif
 #if TALK_WHEN_UPDATING
 #if ONLY_TALK_FOR_KGAIN
 #if SAY_XVEC_EVEN_IF_ONLY_TALKING_FOR_KGAIN
-	std::cout<<"xvec:"<<state_history.back().xvec<<std::endl;
+	std::cout<<"xvec:"<<state_history.back()->xvec<<std::endl;
 #endif
 #endif
 #endif

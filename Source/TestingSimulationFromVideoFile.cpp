@@ -8,7 +8,7 @@
  */
 
 #include "stdafx.h"
-#include "FullDemo_Arduino_EKF_CV_Control.h"
+#include "TestingSimulationFromVideoFile.h"
 #include "TryIncludeJPhysics.h"
 #include <stdio.h>
 #include "EstimationAndControl/PendCart_State_CVMat_defines.h"
@@ -21,20 +21,19 @@ using std::cout; using std::endl;
 
 
 #define LQR_SIMULATION 0
-#define LQR_CONTROL 1
+//#define LQR_CONTROL 1
 //#define FULLSTATE_NL_CONTROL 1
 
 #define ALWAYS_DO_JOYSTICK_CONTROL 1
 #define DO_REAL_CV_FOLLOWING 1
-#define DO_REAL_CONTROLLER_BASED_ON_CV 1
+//#define DO_REAL_CONTROLLER_BASED_ON_CV 1
 
 //#define KALMAN_IS_REALTIME_NOT_EXTRAPOLATED 1
 
 
-void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
+void TestingSimulationFromVideoFile::InitBeforeSimStart()
 {
 	simulation_time_elapsed_mytracker = 0.0;
-	LQR_control_enabled_overriding_joystick = false;
 	
 	
 	arduinoCommunicator.Connect("/dev/ttyACM0", 19200);
@@ -105,10 +104,10 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
     initial_state_for_Kalman.ST_cartx_dot=mypcart->get__cartvel();
 	my_kalman_filter.Initialize(simulation_time_elapsed_mytracker, initial_state_for_Kalman, my_pcsys_constants);
 	
-	my_kalman_filter.max_reasonable_measurement_ytilda__theta =  99.2; //good value is at most 6ish
-	my_kalman_filter.max_reasonable_measurement_ytilda__omega = 92.2;
-	my_kalman_filter.max_reasonable_measurement_ytilda__cartx =  96.2;
-	my_kalman_filter.max_reasonable_measurement_ytilda__cartv = 92.2;
+	my_kalman_filter.max_reasonable_measurement_ytilda__theta = 40.0;
+	my_kalman_filter.max_reasonable_measurement_ytilda__omega = 50.0;
+	my_kalman_filter.max_reasonable_measurement_ytilda__cartx = 40.0;
+	my_kalman_filter.max_reasonable_measurement_ytilda__cartv = 50.0;
 //=====================================================================
 	mycontroller_LQR.Initialize(my_pcsys_constants);
 #endif
@@ -163,11 +162,15 @@ static uint8_t ConvertPWMtoArduinoByte(double PWM)
 }
 
 
-void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double frametime)
+void TestingSimulationFromVideoFile::UpdateSystemStuff_OncePerFrame(double frametime)
 {
 	simulation_time_elapsed_mytracker += frametime;
 	double requested_PWM = 0.0;
-
+	
+	/*if(simulation_time_elapsed_mytracker > 5.0) {
+		cout<<"5 seconds have passed, quitting..."<<endl;
+		exit(0);
+	}*/
 	
 #if DO_REAL_CV_FOLLOWING
 	std::vector<CV_PendCart_Raw_Measurement*>* possible_measurements_vec = myComputerVisionPendulumFinder.UpdateAndCheckForMeasurements();
@@ -218,66 +221,80 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 	
 	mypcart->myPhysics->given_control_force_u = (requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
 #else
+#if LQR_SIMULATION
+	/*cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
+	latest_LQR_control_PWM = requested_PWM = mycontroller_LQR.GetControl(latestEKFstate, frametime);
+	double lqrControl = requested_PWM * my_pcsys_constants.uscalar;
+	my_kalman_filter._SingleUpdateStep(frametime, nullptr, &lqrControl);
+	my_kalman_filter.ForceClearStatesExceptLatest();*/
+	
+	my_kalman_filter.UpdateToTime(simulation_time_elapsed_mytracker);
+	
+	cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
+	latest_LQR_control_PWM = requested_PWM = mycontroller_LQR.GetControl(latestEKFstate, frametime);
+	double lqrControl = requested_PWM * my_pcsys_constants.uscalar;
+	my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker, lqrControl);
+#endif
 
 
-	if(LQR_control_enabled_overriding_joystick == false)
+#if LQR_SIMULATION
+#else
+	const double joystick_deadzone = 20.0;
+	
+	if(sf::Joystick::isConnected(0))
 	{
-		const double joystick_deadzone = 20.0;
+		bool hasX = sf::Joystick::hasAxis(0, sf::Joystick::X);
+		bool hasU = sf::Joystick::hasAxis(0, sf::Joystick::U);
+		double x = (double)(hasX ? sf::Joystick::getAxisPosition(0, sf::Joystick::X) : 0);
+		double u = (double)(hasU ? sf::Joystick::getAxisPosition(0, sf::Joystick::U) : 0);
 		
-		if(sf::Joystick::isConnected(0))
-		{
-			bool hasX = sf::Joystick::hasAxis(0, sf::Joystick::X);
-			bool hasU = sf::Joystick::hasAxis(0, sf::Joystick::U);
-			double x = (double)(hasX ? sf::Joystick::getAxisPosition(0, sf::Joystick::X) : 0);
-			double u = (double)(hasU ? sf::Joystick::getAxisPosition(0, sf::Joystick::U) : 0);
-			
-			if(fabs(x) < joystick_deadzone) {
-				x = 0.0;
-			}
-			if(fabs(u) < joystick_deadzone) {
-				u = 0.0;
-			}
-			
-			double inputVal = static_cast<double>(x+u);
-			
-			if(fabs(inputVal) > 0.01) {
-				if(fabs(inputVal) > 100.0) {
-					inputVal *= (100.0/fabs(inputVal));
-				}
-				inputVal = ((fabs(inputVal) - joystick_deadzone) / (100.0 - joystick_deadzone)) * (inputVal/fabs(inputVal));
-			}
-			
-			// inputVal is now normalized to the range [-1...0...1]
-			
-			inputVal *= -1.0; //sign fix
-			
-			uint8_t signalByte = ConvertPWMtoArduinoByte(inputVal);
-			
-			//std::cout<<"u== "<<std::setprecision(4)<<u<<", inputVal == "<<std::setprecision(4)<<inputVal<<", signalByte == "<<((int)signalByte)<<std::endl;
-			//std::cout<<"byte sent to Arduino: "<<((int)signalByte)<<std::endl;
-			
-			arduinoCommunicator.SendByte(signalByte);
-			
-			requested_PWM = inputVal;
+		if(fabs(x) < joystick_deadzone) {
+			x = 0.0;
 		}
+		if(fabs(u) < joystick_deadzone) {
+			u = 0.0;
+		}
+		
+		double inputVal = static_cast<double>(x+u);
+		
+		if(fabs(inputVal) > 0.01) {
+			if(fabs(inputVal) > 100.0) {
+				inputVal *= (100.0/fabs(inputVal));
+			}
+			inputVal = ((fabs(inputVal) - joystick_deadzone) / (100.0 - joystick_deadzone)) * (inputVal/fabs(inputVal));
+		}
+		
+		// inputVal is now normalized to the range [-1...0...1]
+		
+		uint8_t signalByte = ConvertPWMtoArduinoByte(inputVal);
+		
+		std::cout<<"u== "<<std::setprecision(4)<<u<<", inputVal == "<<std::setprecision(4)<<inputVal<<", signalByte == "<<((int)signalByte)<<std::endl;
+		//std::cout<<"byte sent to Arduino: "<<((int)signalByte)<<std::endl;
+		
+		arduinoCommunicator.SendByte(signalByte);
+		
+		requested_PWM = inputVal;
 	}
-	else { //LQR control enabled by button press
-		
-		cv::Mat currState = my_kalman_filter.GetLatestState();
-		currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
-		
-		/*cv::Mat currState(4,1,CV_64F);
+#if DO_REAL_CONTROLLER_BASED_ON_CV
+#else
+	else
+#endif
+	{
+#if ALWAYS_DO_JOYSTICK_CONTROL
+#elif !DO_REAL_CONTROLLER_BASED_ON_CV
+		cv::Mat currState(4,1,CV_64F);
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 		currState.ST_omega = mypcart->get__omega();
 		currState.ST_cartx = mypcart->get__cartx();
-		currState.ST_cartx_dot = mypcart->get__cartvel();*/
+		currState.ST_cartx_dot = mypcart->get__cartvel();
 		
 		const double linearized_MINangle = 30.0 * (physmath::PI/180.0);
 		const double linearized_MAXangle = 45.0 * (physmath::PI/180.0);
 		const double linearized_anglerange = (linearized_MAXangle - linearized_MINangle);
 		const double currAngleDiff = fabs(currState.ST_theta);
 		
-		double requested_PWM_swingup = 0.0;//mycontroller_nlswing.GetControl(currState, frametime);
+		double requested_PWM_swingup = mycontroller_nlswing.GetControl(currState, frametime);
+		
 		
 		if(fabs(requested_PWM_swingup) > 1.0) {
 			requested_PWM_swingup /= fabs(requested_PWM_swingup);
@@ -285,10 +302,11 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 		
 		double linear_regime_alpha = 0.0; //  1.0 when fully in linear regime, 0.0 when fully out, interpolates between
 		
+		
 #if LQR_CONTROL
 		double requested_PWM_linear = mycontroller_LQR.GetControl(currState, frametime);
 #endif
-		
+
 		if(currAngleDiff <= linearized_MINangle) {
 			linear_regime_alpha = 1.0;
 		} else if(currAngleDiff <= linearized_MAXangle) {
@@ -300,18 +318,10 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 		requested_PWM += requested_PWM_linear*linear_regime_alpha; //LQR controls position as well as angle
 		
 		requested_PWM += requested_PWM_swingup*(1.0 - linear_regime_alpha);
-		
-		//requested_PWM += mycontroller_position.GetControl(currState, frametime) * (1.0 - linear_regime_alpha);
-		
-		
-		if(fabs(requested_PWM) > 1.0) {
-			requested_PWM /= fabs(requested_PWM);
-		}
-		
-		arduinoCommunicator.SendByte(ConvertPWMtoArduinoByte(requested_PWM));
+		requested_PWM += mycontroller_position.GetControl(currState, frametime) * (1.0 - linear_regime_alpha);
 #endif
 	}
-#if 0//DO_REAL_CONTROLLER_BASED_ON_CV
+#if DO_REAL_CONTROLLER_BASED_ON_CV
 	cv::Mat latestEKFstate = my_kalman_filter.GetLatestState();
 	
 	lastlast_LQR_control_PWM = last_LQR_control_PWM;
@@ -339,28 +349,16 @@ void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double 
 	//requested_PWM = 0.0;
 	
 	//mypcart->myPhysics->given_control_force_u = (requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
+#endif
 
 
+#endif
 }
 
 
-void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
+void TestingSimulationFromVideoFile::RespondToKeyStates()
 {
-	/*
-		Xbox controller button map:
-		A == 0
-		B == 1
-		X == 2
-		Y == 3
-	*/
-	if(sf::Joystick::isButtonPressed(0,2)) {
-		LQR_control_enabled_overriding_joystick = true;
-	}
-	else if(sf::Joystick::isButtonPressed(0,0)) {
-		LQR_control_enabled_overriding_joystick = false;
-	}
-	
-    /*if(gGameSystem.GetKeyboard()->keyboard['j']) {
+    if(gGameSystem.GetKeyboard()->keyboard['j']) {
 		
 		if(false) {
 			keyboard_PWM_requested_saved -= 0.001;
@@ -380,11 +378,11 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 		} else {
 			keyboard_PWM_requested_saved = 1.0;
 		}
-    }*/
+    }
 }
 
 
-bool Simulation_FinalDCM2ArduinoKalmanCV::FormatTextInfo(char* text_buffer, int line_n)
+bool TestingSimulationFromVideoFile::FormatTextInfo(char* text_buffer, int line_n)
 {
 if(text_buffer != nullptr)
 {
@@ -448,13 +446,9 @@ static void DrawKalmanCart(cv::Mat givenState, double cartwidth, double cartheig
 }
 
 
-void Simulation_FinalDCM2ArduinoKalmanCV::DrawSystemStuff()
+void TestingSimulationFromVideoFile::DrawSystemStuff()
 {
-	if(LQR_control_enabled_overriding_joystick) {
-		glColor3ub(220,10,10);
-	} else {
-		glColor3ub(220,220,220);
-	}
+	glColor3ub(220,220,220);
 	
 	double outer_bound_height = 0.50;
 	double inner_bound_height = 0.15;
@@ -478,11 +472,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::DrawSystemStuff()
 	phys::drawing::GLVERT2(phys::point(     drawn_but_not_physical__cart_limits + 0.5*mypcart->myPhysics->drawn_cart_width, -outer_bound_height));
 	phys::drawing::GLVERT2(phys::point(     drawn_but_not_physical__cart_limits + 0.5*mypcart->myPhysics->drawn_cart_width,  outer_bound_height));
 	
-	if(LQR_control_enabled_overriding_joystick) {
-		glColor3ub(180,10,10);
-	} else {
-		glColor3ub(180,180,180);
-	}
+	glColor3ub(180,180,180);
 	
 	phys::drawing::GLVERT2(phys::point(-1.0*drawn_but_not_physical__cart_limits_inner - 0.5*mypcart->myPhysics->drawn_cart_width, -inner_bound_height));
 	phys::drawing::GLVERT2(phys::point(-1.0*drawn_but_not_physical__cart_limits_inner - 0.5*mypcart->myPhysics->drawn_cart_width,  inner_bound_height));
@@ -495,7 +485,6 @@ void Simulation_FinalDCM2ArduinoKalmanCV::DrawSystemStuff()
 	DrawKalmanCart(my_kalman_filter.GetLatestState(), mypcart->myPhysics->drawn_cart_width, mypcart->myPhysics->drawn_cart_height,
 													mypcart->myPhysics->l, mypcart->myPhysics->drawn_bob_diameter, 200, 140, 10);
 #endif
-	
 #if 0 //LQR_SIMULATION or DO_REAL_CV_FOLLOWING
 	cv::Mat latest_EKF_state;
 	latest_EKF_state = my_kalman_filter.GetLatestState();

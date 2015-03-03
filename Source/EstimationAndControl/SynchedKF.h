@@ -11,7 +11,10 @@
 class SynchedKF_General
 {
 protected:
-	std::deque<pcstate_class> state_history;
+	//bool state_history_is_sorted; //will always be sorted
+	bool controlforce_history_is_sorted;
+	bool measurements_history_is_sorted;
+	std::deque<pcstate_class*> state_history;
 	std::deque<controlforce_class> controlforce_history;
 	std::deque<CV_PendCart_Measurement> measurements_history;
 	
@@ -21,6 +24,7 @@ protected:
 	//sort to ascending order (earliest times first, latest times last)
 	void SortDataByTimestamps();
 	
+	virtual void SubclassInitialize() {}
 public:
 	void GiveMeasurement(const CV_PendCart_Measurement & new_measurement);
 	void ApplyControlForce(double timestamp, double current_control_force_u);

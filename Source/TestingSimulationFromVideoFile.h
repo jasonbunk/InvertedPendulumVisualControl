@@ -1,5 +1,5 @@
-#ifndef ___FINAL_DCM2_ARDUINO_KALMAN_OPENCV_H____
-#define ___FINAL_DCM2_ARDUINO_KALMAN_OPENCV_H____
+#ifndef ___TESTING_SIMULATION_FROM_VIDEOF_ILE_H____
+#define ___TESTING_SIMULATION_FROM_VIDEOF_ILE_H____
 
 
 #include "SimplerGameSimSystem.h"
@@ -12,13 +12,13 @@
 
 #include "EstimationAndControl/EKF/DCMotor_PendCart_EKF.h"
 
-#include "Webcam/ColoredPendOrientationFinder.h"
+#include "Webcam/FakeWebcamVideoProcessor.h"
 
 #include "Arduino/ArduinoCommsInterface.h"
 
 
 
-class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
+class TestingSimulationFromVideoFile : public SimplerGameSimSystem
 {
 	PendulumCartDCM2_Constants my_pcsys_constants;
 	
@@ -35,8 +35,6 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	CV_PendCart_Measurer my_pendcart_measurer;
 	dcmotor_pendcart_EKF  my_kalman_filter;
 	
-	bool LQR_control_enabled_overriding_joystick;
-	
 	char lastlast_LQR_control_counter;
 	double lastlast_LQR_control_PWM;
 	double last_LQR_control_PWM;
@@ -46,20 +44,16 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	nonlinear_swingup_optimal_controller   mycontroller_nlswing;
 	dcm2_pc_position_controller_pid   mycontroller_position;
 	dcm2_controller_savedhumanreplay mycontroller_replay;
-
-	ColoredPendOrientationFinder myComputerVisionPendulumFinder;
+	
+	FakeWebcamVideoProcessor myComputerVisionPendulumFinder;
 	
 	ArduinoSerialComm arduinoCommunicator;
 	
-	RNG_rand_r rand_device;
 	phys::dcmotor22_pendcart * mypcart;
 	
 public:
-	double SimulatedMeasurePendulumTheta() {return mypcart->positions[0].y;}
-	double SimulatedMeasureCartX() {return mypcart->positions[0].x;}
-	
-	Simulation_FinalDCM2ArduinoKalmanCV() : SimplerGameSimSystem(), mypcart(nullptr) {}
-	~Simulation_FinalDCM2ArduinoKalmanCV() {}
+	TestingSimulationFromVideoFile() : SimplerGameSimSystem(), mypcart(nullptr) {}
+	~TestingSimulationFromVideoFile() {}
 	
 	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
 	
@@ -72,8 +66,6 @@ public:
 
 	virtual void InitBeforeSimStart();
 };
-
-
 
 
 #endif

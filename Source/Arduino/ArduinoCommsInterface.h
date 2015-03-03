@@ -19,6 +19,7 @@ public:
 	void CloseConnection();
 	void Connect(std::string where, int baudRate);
 	void SendByte(uint8_t thebyte);
+	void FakeSimulationSendByte(uint8_t thebyte) {}
 	
 	void UpdateLEDblinker(double dt);
 	

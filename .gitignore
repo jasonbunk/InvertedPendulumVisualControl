@@ -10,3 +10,6 @@ last_webcam_calibration.txt
 
 #ignore trained files
 output/*
+
+#ignore valgrind/callgrind files
+callgrind.out.*

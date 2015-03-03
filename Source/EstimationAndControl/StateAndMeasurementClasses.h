@@ -5,6 +5,23 @@
 #include "PendulumCart_Constants.h"
 #include <iostream>
 
+
+class CV_PendCart_Raw_Measurement
+{
+public:
+	double estimated_delay;
+	double theta;
+	double cartx;
+	
+	friend std::ostream& operator<< (std::ostream &out, const CV_PendCart_Raw_Measurement &bmeas) {
+		out << "(" << bmeas.theta << ", " << bmeas.cartx<< ", delay:"<< bmeas.estimated_delay << ")";
+		return out;
+	}
+	
+	CV_PendCart_Raw_Measurement() : estimated_delay(0.0), theta(0.0), cartx(0.0) {}
+};
+
+
 class CV_PendCart_Measurement
 {
 public:
@@ -34,6 +51,7 @@ public:
 	}
 };
 
+
 class pcstate_class
 {
 public:
@@ -47,6 +65,7 @@ public:
 	pcstate_class() : timestamp(-1000000.0) {}
 	pcstate_class(const pcstate_class & other) : timestamp(other.timestamp) {other.xvec.copyTo(xvec); other.Pmat.copyTo(Pmat);}
 };
+
 
 class controlforce_class
 {
