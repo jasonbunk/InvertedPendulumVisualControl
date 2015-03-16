@@ -29,6 +29,7 @@ using std::cout; using std::endl;
 
 /*extern*/ WindowProjectionInfo global_window_info = WindowProjectionInfo(); //declared in stdafx.h
 /*extern*/ bool SystemIsPaused = true; //declared in stdafx.h
+/*extern*/ bool RenderVisualsUsingSFML = true;
 
 
 
@@ -340,114 +341,141 @@ int main(int argc, char** argv)
 
 	cout<<"Launching InvertedPendulumVisualControl ...\nCreated in 2015 by Jason Bunk."<<endl;
 	cout<<"----------"<<endl;
-
+	cout<<"main arguments:   [render-windows?]"<<endl;
+	cout<<"simulation arguments:  [SIMULATIONTYPE-NUMBER]  [SIM-OPTION]"<<endl;
+	cout<<"    simtypes: 0 == video-based sim,  1 == full demo w/optional webcam,  2 == optimization,  3 == jphysics simulation"<<endl;
+	cout<<"    full demo (sim 1) SIM-OPTION arguments:   [WEBCAM? default:yes]   [calibrate webcam?]"<<endl;
+	
+	if(argc < 2) {
+		exit(0);
+	} else if(argc >= 3) {
+		RenderVisualsUsingSFML = (atoi(argv[1]) != 0);
+	}
+	sf::Window* sfml_cl_window = nullptr;
+	
 	bool do_experimental_old_video_card_fix = false;
 
-	global_window_info.WindowWidth = 1290;
-	global_window_info.WindowHeight = 710;
-
-	global_window_info.WindowWidth_half_f  = static_cast<float>(global_window_info.WindowWidth)*0.5f;
-	global_window_info.WindowHeight_half_f = static_cast<float>(global_window_info.WindowHeight)*0.5f;
+	if(RenderVisualsUsingSFML) {
+		global_window_info.WindowWidth = 800;
+		global_window_info.WindowHeight = 700;
+	} else {
+		global_window_info.WindowWidth = 2;
+		global_window_info.WindowHeight = 2;
+	}
+	
+	if(RenderVisualsUsingSFML) {
+		global_window_info.WindowWidth_half_f  = static_cast<float>(global_window_info.WindowWidth)*0.5f;
+		global_window_info.WindowHeight_half_f = static_cast<float>(global_window_info.WindowHeight)*0.5f;
 //==========================================================================================================================
 
 #ifdef BUILD_WITH_SFML
-    // Request a 32-bits depth buffer when creating the window
-    sf::ContextSettings contextSettings;
-    contextSettings.depthBits = 32;
+		// Request a 32-bits depth buffer when creating the window
+		sf::ContextSettings contextSettings;
+		contextSettings.depthBits = 32;
 
-    // Create the main window
-    sfml_window = new sf::RenderWindow(sf::VideoMode(global_window_info.WindowWidth, global_window_info.WindowHeight), "Simulation (with SFML)", sf::Style::Default, contextSettings);
+		// Create the main window
+		sfml_window = new sf::RenderWindow(sf::VideoMode(global_window_info.WindowWidth, global_window_info.WindowHeight), "Simulation (with SFML)", sf::Style::Default, contextSettings);
 
-	////sfml_window->setVerticalSyncEnabled(true); //VSYNC
+		////sfml_window->setVerticalSyncEnabled(true); //VSYNC
 
-    // Make it the active window for OpenGL calls
-    sfml_window->setActive();
-
-	sfml_window->setMouseCursorVisible(true);
-	sfml_window->setKeyRepeatEnabled(false);
+		// Make it the active window for OpenGL calls
+		sfml_window->setActive();
+		sfml_window->setMouseCursorVisible(true);
+		sfml_window->setKeyRepeatEnabled(false);
 #endif
-
-	setupOpenGLSmoothRendering();
-
+		setupOpenGLSmoothRendering();
 
 //-------------------------------------------------------------------------------------
 
-	if(do_experimental_old_video_card_fix)
-	{
-		cout<<"glewExperimental == true"<<endl;
-		glewExperimental = GL_TRUE;
-	}
+		if(do_experimental_old_video_card_fix)
+		{
+			cout<<"glewExperimental == true"<<endl;
+			glewExperimental = GL_TRUE;
+		}
 
 #if THISPLATFORM == PLATFORM_WINDOWS
-	GLenum err = glewInit();
-	if (GLEW_OK != err)
-	{
-	  // Problem: glewInit failed, something is seriously wrong.
-		cout<<"GLEW init error! "<<phys::to_string(glewGetErrorString(err))<<endl;
-	}
-	cout<<"Status: Using GLEW "<<phys::to_string(glewGetString(GLEW_VERSION))<<endl;
+		GLenum err = glewInit();
+		if (GLEW_OK != err)
+		{
+		  // Problem: glewInit failed, something is seriously wrong.
+			cout<<"GLEW init error! "<<phys::to_string(glewGetErrorString(err))<<endl;
+		}
+		cout<<"Status: Using GLEW "<<phys::to_string(glewGetString(GLEW_VERSION))<<endl;
 #endif
-
+	} else {
+		sfml_cl_window = new sf::Window(sf::VideoMode(global_window_info.WindowWidth, global_window_info.WindowHeight), "Simulation (with SFML)", sf::Style::Default);
+		sfml_cl_window->setActive();
+		sfml_cl_window->setMouseCursorVisible(true);
+		sfml_cl_window->setKeyRepeatEnabled(false);
+		sfml_cl_window->display();
+	}
+	
 #if USE_SIMULATED_TIMER
 	//mytimer.fixed_time_step___if_less_than_zero_all_clocks_are_realtime = 0.01;
 	mytimer.restart();
 #endif
 	StartSimulation(argc, argv);
-
-
+	
+	
+	if(RenderVisualsUsingSFML) {
 #ifdef BUILD_WITH_SFML
-	resizeWindow(global_window_info.WindowWidth, global_window_info.WindowHeight);
+		resizeWindow(global_window_info.WindowWidth, global_window_info.WindowHeight);
+		
+		if(font_for_debugstuff.loadFromFile("Fonts/OpenSans-Bold.ttf")==false) {
+			if(font_for_debugstuff.loadFromFile("../Fonts/OpenSans-Bold.ttf")==false) {
+				cout<<"Warning!! Could not load font Fonts/OpenSans-Bold.ttf from file!"<<endl;
+			}
+		}
 
-	if(font_for_debugstuff.loadFromFile("Fonts/OpenSans-Bold.ttf")==false) {
-		if(font_for_debugstuff.loadFromFile("../Fonts/OpenSans-Bold.ttf")==false) {
-			cout<<"Warning!! Could not load font Fonts/OpenSans-Bold.ttf from file!"<<endl;
+		// Process events
+		sf::Event event;
+
+		// Start game loop
+		while(sfml_window->isOpen())
+		{
+			while(sfml_window->pollEvent(event))
+			{
+				switch(event.type)
+				{
+				case sf::Event::Closed:
+					sfml_window->close(); // Close window : exit
+					break;
+				case sf::Event::KeyPressed:
+					key_up_or_down_func(event.key.code,true);
+					break;
+				case sf::Event::KeyReleased:
+					key_up_or_down_func(event.key.code,false);
+					break;
+				case sf::Event::MouseButtonPressed:
+					myMouseFunc(event.mouseButton.button, 1, event.mouseButton.x, event.mouseButton.y); //remnant of GLUT:  1 == down
+					break;
+				case sf::Event::MouseButtonReleased:
+					myMouseFunc(event.mouseButton.button, 0, event.mouseButton.x, event.mouseButton.y); //remnant of GLUT:  0 == up
+					break;
+				case sf::Event::MouseMoved:
+					myMouseMotionFunc(event.mouseMove.x, event.mouseMove.y);
+					break;
+				case sf::Event::Resized:
+					resizeWindow(event.size.width, event.size.height);
+					break;
+				case sf::Event::TextEntered:
+					gGameSystem.GetKeyboard()->last_unicode_key_entered = event.text.unicode;
+					break;
+				}
+			}
+
+			updatePhysics();
+			displayFunc();
+			sfml_window->display();
+		}
+#endif
+	} else {
+		sf::Event event;
+		while(true) {
+			updatePhysics();
+			sfml_cl_window->pollEvent(event);
 		}
 	}
-
-	// Process events
-	sf::Event event;
-
-    // Start game loop
-    while(sfml_window->isOpen())
-    {
-        while(sfml_window->pollEvent(event))
-        {
-			switch(event.type)
-			{
-			case sf::Event::Closed:
-                sfml_window->close(); // Close window : exit
-				break;
-			case sf::Event::KeyPressed:
-				key_up_or_down_func(event.key.code,true);
-				break;
-			case sf::Event::KeyReleased:
-				key_up_or_down_func(event.key.code,false);
-				break;
-			case sf::Event::MouseButtonPressed:
-				myMouseFunc(event.mouseButton.button, 1, event.mouseButton.x, event.mouseButton.y); //remnant of GLUT:  1 == down
-				break;
-			case sf::Event::MouseButtonReleased:
-				myMouseFunc(event.mouseButton.button, 0, event.mouseButton.x, event.mouseButton.y); //remnant of GLUT:  0 == up
-				break;
-			case sf::Event::MouseMoved:
-				myMouseMotionFunc(event.mouseMove.x, event.mouseMove.y);
-				break;
-			case sf::Event::Resized:
-                resizeWindow(event.size.width, event.size.height);
-				break;
-			case sf::Event::TextEntered:
-				gGameSystem.GetKeyboard()->last_unicode_key_entered = event.text.unicode;
-				break;
-			}
-        }
-
-		updatePhysics();
-		displayFunc();
-        sfml_window->display();
-	}
-#endif
-
-
 	return 0;					// If using freeglut, this line is never reached
 }
 
@@ -457,7 +485,9 @@ int main(int argc, char** argv)
 void ExitSimulation()
 {
 #ifdef BUILD_WITH_SFML
-	sfml_window->close();
+	if(sfml_window != nullptr) {
+		sfml_window->close();
+	}
 	exit(0);
 #else
 	exit(0);

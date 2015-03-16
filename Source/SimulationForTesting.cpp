@@ -27,7 +27,7 @@ using std::cout; using std::endl;
 //#define KALMAN_IS_REALTIME_NOT_EXTRAPOLATED 1
 
 
-void SimulationDCM2Kalman::InitBeforeSimStart()
+void SimulationForTesting::InitBeforeSimStart()
 {
 	simulation_time_elapsed_mytracker = 0.0;
 	LQR_control_enabled_overriding_joystick = true;
@@ -66,7 +66,6 @@ void SimulationDCM2Kalman::InitBeforeSimStart()
 	
 	allOldEntities.push_back(mypcart);
 	
-	gGameSystem.camera_rotation.r = 2.0; //zoom in
 	gGameSystem.fixed_time_step = 0.004;
 	gGameSystem.fixed_timestep_randomizer__stddev = -0.001; //negative: don't randomizes
 	INTEGRATOR = 5; //fourth-order Runge-Kutta
@@ -123,7 +122,7 @@ void SimulationDCM2Kalman::InitBeforeSimStart()
 
 
 
-void SimulationDCM2Kalman::UpdateSystemStuff_OncePerFrame(double frametime)
+void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 {
 	simulation_time_elapsed_mytracker += frametime;
 	double requested_PWM = 0.0;
@@ -277,7 +276,7 @@ void SimulationDCM2Kalman::UpdateSystemStuff_OncePerFrame(double frametime)
 }
 
 
-void SimulationDCM2Kalman::RespondToKeyStates()
+void SimulationForTesting::RespondToKeyStates()
 {
 	/*
 		Xbox controller button map:
@@ -317,7 +316,7 @@ void SimulationDCM2Kalman::RespondToKeyStates()
 }
 
 
-bool SimulationDCM2Kalman::FormatTextInfo(char* text_buffer, int line_n)
+bool SimulationForTesting::FormatTextInfo(char* text_buffer, int line_n)
 {
 if(text_buffer != nullptr)
 {
@@ -381,7 +380,7 @@ static void DrawKalmanCart(cv::Mat givenState, double cartwidth, double cartheig
 }
 
 
-void SimulationDCM2Kalman::DrawSystemStuff()
+void SimulationForTesting::DrawSystemStuff()
 {
 	if(LQR_control_enabled_overriding_joystick) {
 		glColor3ub(220,10,10);

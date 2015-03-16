@@ -222,6 +222,12 @@
 		<Unit filename="Source/SimplerGameSimSystem.h">
 			<Option virtualFolder="main/" />
 		</Unit>
+		<Unit filename="Source/SimulationForTesting.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/SimulationForTesting.h">
+			<Option virtualFolder="main/" />
+		</Unit>
 		<Unit filename="Source/TestingSimulationFromVideoFile.cpp">
 			<Option virtualFolder="main/" />
 		</Unit>
@@ -316,6 +322,12 @@
 			<Option virtualFolder="Webcam/" />
 		</Unit>
 		<Unit filename="Source/Webcam/RealtimeVideoProcessor.h">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/SimulationSnapshotsSimulatingWebcam.cpp">
+			<Option virtualFolder="Webcam/" />
+		</Unit>
+		<Unit filename="Source/Webcam/SimulationSnapshotsSimulatingWebcam.h">
 			<Option virtualFolder="Webcam/" />
 		</Unit>
 		<Unit filename="Source/Webcam/Webcam.cpp">

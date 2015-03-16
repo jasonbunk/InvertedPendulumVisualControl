@@ -25,6 +25,7 @@
 #define TRUE 1
 #define FALSE 0
 #endif
+
 #include <stdio.h>
 #include <iostream>
 #include <assert.h>
@@ -73,7 +74,7 @@ extern GameSystemBase gGameSystem; //instantiated in "GameSystemBase.cpp"
 // reference additional headers your program requires here
 // frequently needed files, infrequently updated files
 
-
+extern bool RenderVisualsUsingSFML; //defaults to true, but can disable all windows
 extern bool SystemIsPaused; //defined in main.cpp
 
 

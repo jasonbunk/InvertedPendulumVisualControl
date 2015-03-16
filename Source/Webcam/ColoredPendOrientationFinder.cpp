@@ -16,6 +16,7 @@
  * See the License for the specific language governing permissions and
  * limitations under the License.
 */
+#include "../stdafx.h"
 #include "ColoredPendOrientationFinder.h"
 using std::cout; using std::endl;
 #include "Utils/SUtils.h"
@@ -44,7 +45,7 @@ void ColoredPendOrientationFinder::CheckForCapturedImage(double *& possible_retu
 
 CV_PendCart_Raw_Measurement * ColoredPendOrientationFinder::ProcessImageToMeasurements(cv::Mat * givenMat)
 {
-	return myImageProcessor.ProcessImageToMeasurements(givenMat, true);
+	return myImageProcessor.ProcessImageToMeasurements(givenMat, false);
 }
 
 
@@ -190,20 +191,26 @@ void ColoredPendOrientationFinder::CalibrateCartFinder()
 
 void ColoredPendOrientationFinder::DoInitialization()
 {
-	mywebcam = new WebcamCV(1);
-	mywebcam->InitWindow();
+	if(mywebcam == nullptr) {
+		mywebcam = new WebcamCV(1);
+		mywebcam->InitWindow();
+	}
 	
-#if 0
-	myImageProcessor.angle_when_vertical = 0.0;
-	myImageProcessor.calibration_running_total_angle = 0.0;
-	myImageProcessor.calibration_num_angles_saved_hanging = 0.0;
-	CalibrateCartFinder();
-	CalibratePendulumFinder();
+	if(calibrated == false) {LoadOldCalibration();}
 	
-	myImageProcessor.SaveCalibrationToFile("last_webcam_calibration.txt");
+	//mask of whole image
+	myImageProcessor.lastBinaryCart_Dilated = cv::Mat::ones(mywebcam->GetLastReceivedImageMainThread().size(), CV_8U);
+	myImageProcessor.lastBinaryCart_Dilated.copyTo(myImageProcessor.lastBinaryPend_Dilated);
 	
-	myImageProcessor.PrintCalibration();
-#else
+	mywebcam->StartAutoGrabImagesThread();
+}
+
+
+void ColoredPendOrientationFinder::LoadOldCalibration() {
+	if(mywebcam == nullptr) {
+		mywebcam = new WebcamCV(1);
+		mywebcam->InitWindow();
+	}
 	myImageProcessor.LoadCalibrationFromFile("last_webcam_calibration.txt");
 	myImageProcessor.PrintCalibration();
 	
@@ -223,24 +230,35 @@ void ColoredPendOrientationFinder::DoInitialization()
 		double cartx, carty, pendtheta;
 		myImageProcessor.GetCartLocationFromSegmentedImg(&cartBinary, false, cartx, carty);
 		
-		cv::imshow("warming up...", blurredImg);
-		myImageProcessor.GetPendAngleFromSegmentedImg(&cartBinary, &pendBinary, true, cartx, carty, pendtheta);
-		cv::waitKey(3);
+		if(RenderVisualsUsingSFML) {
+			cv::imshow("warming up...", blurredImg);
+			myImageProcessor.GetPendAngleFromSegmentedImg(&cartBinary, &pendBinary, true, cartx, carty, pendtheta);
+			cv::waitKey(3);
+		}
 		MultiPlatformSleep(10);
 		
 		time_elapsed += warmupTimer.getTimeSinceLastMeasurement();
 	}
 	cv::destroyAllWindows();
-#endif
-
-	//mask of whole image
-	myImageProcessor.lastBinaryCart_Dilated = cv::Mat::ones(mywebcam->GetLastReceivedImageMainThread().size(), CV_8U);
-	myImageProcessor.lastBinaryCart_Dilated.copyTo(myImageProcessor.lastBinaryPend_Dilated);
-	
-	mywebcam->StartAutoGrabImagesThread();
+	calibrated = true;
 }
 
-
+void ColoredPendOrientationFinder::DoNewCalibration() {
+	if(mywebcam == nullptr) {
+		mywebcam = new WebcamCV(1);
+		mywebcam->InitWindow();
+	}
+	myImageProcessor.angle_when_vertical = 0.0;
+	myImageProcessor.calibration_running_total_angle = 0.0;
+	myImageProcessor.calibration_num_angles_saved_hanging = 0.0;
+	CalibrateCartFinder();
+	CalibratePendulumFinder();
+	
+	myImageProcessor.SaveCalibrationToFile("last_webcam_calibration.txt");
+	
+	myImageProcessor.PrintCalibration();
+	calibrated = true;
+}
 
 
 

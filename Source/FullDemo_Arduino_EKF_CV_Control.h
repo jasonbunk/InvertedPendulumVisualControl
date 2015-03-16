@@ -46,7 +46,9 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	nonlinear_swingup_optimal_controller   mycontroller_nlswing;
 	dcm2_pc_position_controller_pid   mycontroller_position;
 	dcm2_controller_savedhumanreplay mycontroller_replay;
-
+	
+	bool useWebcamForVision; //default: yes
+	bool calibrateWebcamVision; //default: no
 	ColoredPendOrientationFinder myComputerVisionPendulumFinder;
 	
 	ArduinoSerialComm arduinoCommunicator;
@@ -55,18 +57,17 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	phys::dcmotor22_pendcart * mypcart;
 	
 public:
-	double SimulatedMeasurePendulumTheta() {return mypcart->positions[0].y;}
-	double SimulatedMeasureCartX() {return mypcart->positions[0].x;}
-	
-	Simulation_FinalDCM2ArduinoKalmanCV() : SimplerGameSimSystem(), mypcart(nullptr) {}
+	Simulation_FinalDCM2ArduinoKalmanCV() : SimplerGameSimSystem(), useWebcamForVision(true), calibrateWebcamVision(false), mypcart(nullptr) {}
 	~Simulation_FinalDCM2ArduinoKalmanCV() {}
 	
-	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
+	void SetWebcamUse(bool useit) {useWebcamForVision = useit;}
+	void TellWebcamVisionToCalibrate(bool calibrate) {calibrateWebcamVision = calibrate;}
 	
 	virtual void UpdateSystemStuff_OncePerFrame(double frametime);
 	
 	virtual void RespondToKeyStates();
 
+	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
 	virtual void DrawSystemStuff();
 	virtual bool FormatTextInfo(char* text_buffer, int line_n);
 

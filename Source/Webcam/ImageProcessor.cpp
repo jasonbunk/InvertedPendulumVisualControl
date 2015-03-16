@@ -1,3 +1,4 @@
+#include "../stdafx.h"
 #include "ImageProcessor.h"
 #include "TryIncludeJPhysics.h"
 #include "EstimationAndControl/PendCart_State_CVMat_defines.h"
@@ -61,7 +62,7 @@ double ImageProcessor::GetPendAngleFromSegmentedImg(cv::Mat * segImgForCart, cv:
 	
 	returned_theta = theta_est_1;//atan2(0.75*(2.0*u11) + (cart_y-y), 0.75*(u20 - u02) + (cart_x-x));
 	
-	if(drawstuff) {
+	if(drawstuff && RenderVisualsUsingSFML) {
 		std::vector<cv::Mat> chanels3(3);
 		segImgForPend->copyTo(chanels3[0]);
 		segImgForPend->copyTo(chanels3[1]);
@@ -93,7 +94,7 @@ void ImageProcessor::GetCartLocationFromSegmentedImg(cv::Mat * segImgForCart,
 	cart_x = (M.m10 / M.m00);
 	cart_y = (M.m01 / M.m00);
 	
-	if(drawstuff) {
+	if(drawstuff && RenderVisualsUsingSFML) {
 		std::vector<cv::Mat> chanels3(3);
 		segImgForCart->copyTo(chanels3[0]);
 		segImgForCart->copyTo(chanels3[1]);

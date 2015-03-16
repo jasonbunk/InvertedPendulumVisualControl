@@ -57,7 +57,6 @@ void InteractiveNonconvexOptimization::InitBeforeSimStart()
 	
 	allOldEntities.push_back(mypcart);
 	
-	gGameSystem.camera_rotation.r = 2.0; //zoom in
 	gGameSystem.fixed_time_step = 0.0025;
 	gGameSystem.fixed_timestep_randomizer__stddev = -1.0; //negative: don't randomizes
 	INTEGRATOR = 5; //fourth-order Runge-Kutta

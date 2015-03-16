@@ -30,26 +30,40 @@ void StartSimulation(int argc, char** argv)
 {
 	SimplerGameSimSystem * simsys = nullptr;
 	
-	if(argc < 2) {
-		cout<<"starting simulation for testing (simulated pend-cart system)..."<<endl;
-		simsys = new SimulationDCM2Kalman();
-	} else if(atoi(argv[1]) == 0) {
+	
+	int argOff = 2; //number of args before we get to simulation-specific args
+	
+	if((argc-argOff) <= 0) {
+		exit(0);
+		//cout<<"starting simulation for testing (simulated pend-cart system)..."<<endl;
+		//simsys = new SimulationForTesting();
+	} else if(atoi(argv[argOff]) == 0) {
 		cout<<"starting video-based simulation test..."<<endl;
 		simsys = new TestingSimulationFromVideoFile();
-	} else if(atoi(argv[1]) == 1) {
+	} else if(atoi(argv[argOff]) == 1) {
 		cout<<"starting FullDemo_Arduino_EKF_CV_Control..."<<endl;
 		simsys = new Simulation_FinalDCM2ArduinoKalmanCV();
-	} else if(atoi(argv[1]) == 2) {
+		if((argc-argOff) >= 1) {
+			bool useWebcam = (atoi(argv[argOff+1]) != 0);
+			dynamic_cast<Simulation_FinalDCM2ArduinoKalmanCV*>(simsys)->SetWebcamUse(useWebcam);
+			cout<<(useWebcam?"~~~~~~~~~~~~~~ USING WEBCAM":"not using webcam!")<<endl;
+			if(useWebcam && (argc-argOff) >= 2) {
+				if(atoi(argv[argOff+2]) != 0) {
+					dynamic_cast<Simulation_FinalDCM2ArduinoKalmanCV*>(simsys)->TellWebcamVisionToCalibrate(true);
+				}
+			}
+		}
+	} else if(atoi(argv[argOff]) == 2) {
 		cout<<"starting InteractiveNonconvexOptimization..."<<endl;
 		simsys = new InteractiveNonconvexOptimization();
-	} else if(atoi(argv[1]) == 3) {
+	} else if(atoi(argv[argOff]) == 3) {
 		cout<<"starting simulation for testing (simulated pend-cart system)..."<<endl;
-		simsys = new SimulationDCM2Kalman();
+		simsys = new SimulationForTesting();
 	}
 	
 	gGameSystem.camera_rotation.Nullify();
-	gGameSystem.camera_rotation.r = 10.0;
-	gGameSystem.camera_original_r = 10.0;
+	gGameSystem.camera_rotation.r = 0.5;
+	gGameSystem.camera_original_r = 0.5;
 	gGameSystem.cheats.do_largetimestep_remainders = false;
 
 	simsys->stop_entities_that_exit_level_boundaries = false;

@@ -5,7 +5,6 @@
 #define SET_GAMESYSTEMS_KEYBOARDKEY_NEW_STATE(keyyy) \
 {if(isdown && gGameSystem.GetKeyboard()->keyboard[keyyy] == false){gGameSystem.GetKeyboard()->OnKeyPressed(keyyy);} gGameSystem.GetKeyboard()->keyboard[keyyy] = isdown;}
 
-
 #if BUILD_WITH_SFML
 void key_up_or_down_func(sf::Keyboard::Key key, bool isdown)
 {

@@ -36,7 +36,13 @@ double dcm2_controller_inverted_linearized_LQR::GetControl(cv::Mat state, double
 {
 	cv::Mat K(1,4,CV_64F);
 	
-	//slightly more aggressive control with wood block
+	//15cm pendulum LQR with LQR-weights Qtheta=1, Qx=50, Ru=100
+	K.at<double>(0,0) = 2.9916;
+	K.at<double>(0,1) = 0.2478;
+	K.at<double>(0,2) = -0.6950;
+	K.at<double>(0,3) = -2.1655;
+	
+	/*//slightly more aggressive control with wood block
 	K.at<double>(0,0) =  4.2348;
 	K.at<double>(0,1) =  0.7244;
 	K.at<double>(0,2) = -0.3126;

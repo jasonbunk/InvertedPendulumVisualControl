@@ -12,6 +12,7 @@ class ColoredPendOrientationFinder : public RealtimeVideoProcessor
 protected:
 	WebcamCV * mywebcam;
 	ImageProcessor myImageProcessor;
+	bool calibrated;
 	
 	virtual void CheckForCapturedImage(double *& possible_returned_delaytime, cv::Mat *& possible_returned_img);
 	virtual CV_PendCart_Raw_Measurement* ProcessImageToMeasurements(cv::Mat * givenMat);
@@ -21,8 +22,10 @@ protected:
 	void CalibrateCartFinder();
 	
 public:
+	void LoadOldCalibration();
+	void DoNewCalibration();
 
-	ColoredPendOrientationFinder() : RealtimeVideoProcessor(), mywebcam(nullptr) {}
+	ColoredPendOrientationFinder() : RealtimeVideoProcessor(), mywebcam(nullptr), calibrated(false) {}
 };
 
 

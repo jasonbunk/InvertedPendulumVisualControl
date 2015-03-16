@@ -15,7 +15,7 @@
 #include "Webcam/SimulationSnapshotsSimulatingWebcam.h"
 
 
-class SimulationDCM2Kalman : public SimplerGameSimSystem
+class SimulationForTesting : public SimplerGameSimSystem
 {
 	PendulumCartDCM2_Constants my_pcsys_constants;
 	
@@ -52,8 +52,8 @@ public:
 	double SimulatedMeasurePendulumTheta() {return mypcart->positions[0].y;}
 	double SimulatedMeasureCartX() {return mypcart->positions[0].x;}
 	
-	SimulationDCM2Kalman() : SimplerGameSimSystem(), mypcart(nullptr) {}
-	~SimulationDCM2Kalman() {}
+	SimulationForTesting() : SimplerGameSimSystem(), mypcart(nullptr) {}
+	~SimulationForTesting() {}
 	
 	virtual double GetGridWidth_ForDrawingPlanes() const {return 0.1;}
 	

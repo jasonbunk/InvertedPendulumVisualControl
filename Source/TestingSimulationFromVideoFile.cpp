@@ -71,12 +71,10 @@ void TestingSimulationFromVideoFile::InitBeforeSimStart()
 	mypcart->color[1] = 50;
 	mypcart->color[2] = 255;
 	
-#if DO_REAL_CONTROLLER_BASED_ON_CV
-#else
+#if 0
 	allOldEntities.push_back(mypcart);
 #endif
 	
-	gGameSystem.camera_rotation.r = 2.0; //zoom in
 	gGameSystem.fixed_time_step = 0.004;
 	gGameSystem.fixed_timestep_randomizer__stddev = -0.001; //negative: don't randomizes
 	INTEGRATOR = 5; //fourth-order Runge-Kutta

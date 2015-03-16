@@ -99,12 +99,15 @@ void WebcamCV::initCameraParams()
 	img_width_received = the_webcam.get(CV_CAP_PROP_FRAME_WIDTH);
 	img_height_received = the_webcam.get(CV_CAP_PROP_FRAME_HEIGHT);
 	double readfps = the_webcam.get(CV_CAP_PROP_FPS);
-	std::cout<<"##### fps of webcam according to itself: "<<readfps<<std::endl;
+	cout<<"##### fps of webcam according to itself: "<<readfps<<endl;
+	cout<<"##### webcam image dimensions: "<<img_width_received<<"x"<<img_height_received<<endl;
 	
 #if 1
 	the_webcam.set(CV_CAP_PROP_FRAME_WIDTH, 320.0);
 	the_webcam.set(CV_CAP_PROP_FRAME_HEIGHT, 240.0);
 	the_webcam.set(CV_CAP_PROP_FPS, 30.0);
+	
+	cout<<"####2 webcam image dimensions: "<<the_webcam.get(CV_CAP_PROP_FRAME_WIDTH)<<"x"<<the_webcam.get(CV_CAP_PROP_FRAME_HEIGHT)<<endl;
 	
 	//MultiPlatformSleep(2000);
 	//the_webcam.set(CV_CAP_PROP_EXPOSURE, -10.0);

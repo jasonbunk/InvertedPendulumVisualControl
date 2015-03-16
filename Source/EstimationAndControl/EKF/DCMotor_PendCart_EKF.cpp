@@ -64,10 +64,10 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	
 	// calculate matrices
 	//
-	//cv::Mat Fkm1_J(GetJacobianFmat(dt, state_history.back()->xvec, current_control_u));
-	//cv::Mat Fkm1_J_T;
-	//cv::transpose(Fkm1_J, Fkm1_J_T);
-	//cv::Mat Qkm1(GetQmat(dt, state_history.back()->xvec));
+	cv::Mat Fkm1_J(GetJacobianFmat(dt, state_history.back()->xvec, current_control_u));
+	cv::Mat Fkm1_J_T;
+	cv::transpose(Fkm1_J, Fkm1_J_T);
+	cv::Mat Qkm1(GetQmat(dt, state_history.back()->xvec));
 	
 	
 	// predicted states
@@ -89,7 +89,7 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	
 	
 	
-	cv::Mat P_k_km1  =  state_history.back()->Pmat;//Fkm1_J*(state_history.back().Pmat)*Fkm1_J_T + Qkm1;
+	cv::Mat P_k_km1  =  Fkm1_J*(state_history.back()->Pmat)*Fkm1_J_T + Qkm1;
 	
 	//======================================================================================
 	// Update (if measurement is available)
@@ -147,13 +147,15 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 		cv::Mat Kk = cv::Mat::zeros(4,2,CV_64F);
 		
 		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
-			Kk.at<double>(0,0) = 0.6;
-			Kk.at<double>(2,1) = 0.6;
+			Kk.at<double>(0,0) = 0.99;
+			Kk.at<double>(2,1) = 0.99;
 			
 			last_few_ytilda_theta.push_back(fabs(ytilda.POSMEAS__theta)); //use absolute value, for deviation distance
 			last_few_ytilda_cartx.push_back(fabs(ytilda.POSMEAS__cartx));
 			
 			assert(num_recent_ytildas_to_consider == 3); //we'll use a formula for 3 element lists
+			
+			cout<<"theta meas: "<<possibly_given_measurement->data.POSMEAS__theta<<endl;
 			
 			if(last_few_ytilda_theta.size() > num_recent_ytildas_to_consider) {
 				last_few_ytilda_theta.pop_front();
@@ -171,8 +173,8 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 			}
 		
 		} else if(possibly_given_measurement->type == CV_PendCart_Measurement::velocities) {
-			Kk.at<double>(1,0) = 0.08;
-			Kk.at<double>(3,1) = 0.08;
+			Kk.at<double>(1,0) = 0.25;
+			Kk.at<double>(3,1) = 0.25;
 			
 			last_few_ytilda_omega.push_back(fabs(ytilda.VELMEAS__omega)); //use absolute value, for deviation distance
 			last_few_ytilda_cartv.push_back(fabs(ytilda.VELMEAS__cartv));

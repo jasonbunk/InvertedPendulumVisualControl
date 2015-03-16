@@ -30,12 +30,12 @@ static const double TRACK_LIMITS_SIM_BOUNDS = 1000.0;
 /*extern*/ double PRINTER_LINEAR_WIDTH_X = TRACKS_LIMITS_TRUE_MAX_BOUNDS;
 /*extern*/ double PRINTER_EXPECTED_MAX_OMEGA = 15.0;
 /*extern*/ double PRINTER_EXPECTED_MAX_VELOCITY = 1.3;
-/*extern*/ double PRINTER_CONTROL_SCALAR_U = 5.5; //experimental estimate at 10 volts
+/*extern*/ double PRINTER_CONTROL_SCALAR_U = 7.0; //experimental estimate at 10 volts
 												//is about 7.0 at 12 volts
 
-//static const double PENDLEN = (14.0+(3.0/8.0)) * 2.54*0.01;
-//static const double PENDWID = ( 1.0+(1.0/16.0))* 2.54*0.01;
-//static const double PENDMASS= 0.0262;
+static const double PENDLEN = 15.0 * 0.01;
+static const double PENDWID = 2.69875 * 0.01;
+static const double PENDMASS= 2.678*(PENDLEN*PENDWID); //proportional to area
 
 static const double MASS_OF_INK_CARTRIDGE_AND_BOLT = 0.060;
 static const double CARTMASS = 0.074 + MASS_OF_INK_CARTRIDGE_AND_BOLT + 0.0037;
@@ -57,16 +57,16 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     consts.g = 9.81;
     
 //----------------------------------------
-    consts.m = 0.051; //approx. 51 grams
+    consts.m = PENDMASS;
     
-  //consts.Ipc = 0.000292664 == PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
+	consts.Ipc = PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
     
-    consts.Ipc = 0.000655406;
+    consts.l = (0.5 * PENDLEN);
     
-    consts.l = 0.2657;
+    cout<<"PENDULUM IS MODELED AS A RECTANGLE WITH DIMENSIONS: "<<(PENDLEN*100.0)<<"x"<<(PENDWID*100.0)<<" (cm) with mass: "<<(PENDMASS*1000.0)<<" grams"<<endl;
 //----------------------------------------
     
-    consts.kp = frictionless ? 0.0 : 0.004;
+    consts.kp = frictionless ? 0.0 : 0.0012;
     
     consts.MC = (CARTMASS + MOTOREQUIVALENTMASS);
     consts.kc = frictionless ? 0.0 : 7.0;
@@ -76,27 +76,19 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     
     consts.max_displacement_of_cart_around_COMom_while_pend_swings = 0.036;
 	cout<<"todo: more accurately calculate \"max_displacement_of_cart_around_COMom_while_pend_swings\" ?"<<endl;
+	//cout<<"        this is used for position controllers (how close to the sides should it be allowed)"<<endl;
     
 //--------------------------------------------
 // Noise estimates
 
 	consts.theta_measurement_noise_stddev = 0.006;
-	consts.cart_x_measurement_noise_stddev = 0.005;
+	consts.cart_x_measurement_noise_stddev = 0.001;
 	
 	consts.omega_measurement_noise_stddev = 0.024;
-	consts.cart_vel_measurement_noise_stddev = 0.020;
+	consts.cart_vel_measurement_noise_stddev = 0.004;
 	
 	consts.pendulum_process_noise_accelerations_stddev = 0.5;
-	consts.cart_x_process_noise_accelerations_stddev = 0.05;
-	
-	
-	/*consts.theta_measurement_noise_stddev = 0.04;
-	consts.omega_measurement_noise_stddev = 0.28;
-	consts.pendulum_process_noise_accelerations_stddev = 1.2;
-	
-	consts.cart_x_measurement_noise_stddev   = 0.005;
-	consts.cart_vel_measurement_noise_stddev = 0.035;
-	consts.cart_x_process_noise_accelerations_stddev = 0.1;*/
+	consts.cart_x_process_noise_accelerations_stddev = 2.05;
 	
 //--------------------------------------------
     
