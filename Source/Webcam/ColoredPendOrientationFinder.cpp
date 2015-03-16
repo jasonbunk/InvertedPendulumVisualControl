@@ -23,6 +23,7 @@ using std::cout; using std::endl;
 #include "Utils/MathUtils.h"
 #include "EstimationAndControl/PendCart_State_CVMat_defines.h"
 #include "Utils/MultiPlatformSleep.h"
+#include "PrinterPhys124_PendCart_Params.h"
 #include "Webcam.h"
 #include "TryIncludeJPhysics.h"
 #include <fstream>
@@ -38,7 +39,7 @@ void ColoredPendOrientationFinder::CheckForCapturedImage(double *& possible_retu
 	if(possible_returned_img != nullptr)
 	{
 		possible_returned_delaytime = new double();
-		(*possible_returned_delaytime) = 0.05; //fixed estimated webcam delay
+		(*possible_returned_delaytime) = WEBCAM_IMG_GRAB_TIME; //fixed estimated webcam delay, not including computer vision image processing
 	}
 }
 

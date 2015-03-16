@@ -34,8 +34,9 @@
 void SynchedKF_PendCartDCM2::Initialize(double initial_timestamp, cv::Mat initial_xvec, PendulumCartDCM2_Constants system_params)
 {
 	pcsys = system_params;
-	fixed_time_step = 0.002; // (1/50) of (1/8) of a second
-	length_of_time_of_history_to_save = 0.3;//0.280; //up to 0.280 seconds into the past, or 112 points
+	fixed_time_step = 0.001; //update at 1 kHz
+	length_of_time_of_history_to_save = 0.25;//up to 250 points in the past
+	
 //----------------------------------------
 	state_history.clear();
 	controlforce_history.clear();

@@ -51,6 +51,8 @@ void RealtimeVideoProcessor::ThreadMainLoopForProcessingIncomingImagesToMeasurem
 			if(possible_returned_measurement != nullptr) {
 				possible_returned_measurement->estimated_delay = ((*possible_returned_delaytime) + imgProcessingTimer.getTimeSinceLastMeasurement());
 				
+				//cout<<"image processing time: "<<(possible_returned_measurement->estimated_delay - (*possible_returned_delaytime))<<endl;
+				
 				recent_measurements_mutex.lock();
 				if(recent_measurements.empty() == false) {
 					for(int ii=0; ii<recent_measurements.size(); ii++) {

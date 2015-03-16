@@ -30,6 +30,11 @@ static const double TRACK_LIMITS_SIM_BOUNDS = 1000.0;
 /*extern*/ double PRINTER_LINEAR_WIDTH_X = TRACKS_LIMITS_TRUE_MAX_BOUNDS;
 /*extern*/ double PRINTER_EXPECTED_MAX_OMEGA = 15.0;
 /*extern*/ double PRINTER_EXPECTED_MAX_VELOCITY = 1.3;
+
+
+/*extern*/ double WEBCAM_IMG_GRAB_TIME = 0.05; //fixed estimated webcam delay, not including computer vision image processing
+/*extern*/ double CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL = 0.015; //estimated delay for the Arduino to enact a change in control
+
 /*extern*/ double PRINTER_CONTROL_SCALAR_U = 7.0; //experimental estimate at 10 volts
 												//is about 7.0 at 12 volts
 

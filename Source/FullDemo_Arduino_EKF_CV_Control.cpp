@@ -66,10 +66,11 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	mypcart->color[2] = 255;
 	
 	if(useWebcamForVision==false) {
+		cout<<"PUSHED BACK A JPHYSICS CART FOR SIMULATION !!!!!!!!!!!!!!!!!!!!!!"<<endl;
 		allOldEntities.push_back(mypcart);
 	}
 	
-	gGameSystem.fixed_time_step = 0.004;
+	gGameSystem.fixed_time_step = 0.001;
 	gGameSystem.fixed_timestep_randomizer__stddev = -0.001; //negative: don't randomizes
 	INTEGRATOR = 5; //fourth-order Runge-Kutta
     stop_entities_that_exit_level_boundaries = false;
@@ -162,10 +163,11 @@ static double last_pend_angle_additional = 0.0;
 void Simulation_FinalDCM2ArduinoKalmanCV::UpdateSystemStuff_OncePerFrame(double frametime)
 {
 	simulation_time_elapsed_mytracker += frametime;
-	double requested_PWM = 0.0;//last_pend_angle_additional;
-
+	double requested_PWM = last_pend_angle_additional;
 	
-
+	const double LQR_control_scalar = 1.0;
+	
+	
 if(useWebcamForVision) {
 	std::vector<CV_PendCart_Raw_Measurement*>* possible_measurements_vec = myComputerVisionPendulumFinder.UpdateAndCheckForMeasurements();
 	
@@ -259,6 +261,9 @@ if(useWebcamForVision) {
 			arduinoCommunicator.SendByte(signalByte);
 			
 			requested_PWM = inputVal;
+			
+			my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
+												requested_PWM*my_pcsys_constants.uscalar);
 		}
 	}
 	else { //LQR control enabled by button press
@@ -275,8 +280,8 @@ if(useWebcamForVision) {
 		}
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
 		
-		const double linearized_MINangle = 30.0 * (physmath::PI/180.0);
-		const double linearized_MAXangle = 45.0 * (physmath::PI/180.0);
+		const double linearized_MINangle = 45.0 * (physmath::PI/180.0);
+		const double linearized_MAXangle = 55.0 * (physmath::PI/180.0);
 		const double linearized_anglerange = (linearized_MAXangle - linearized_MINangle);
 		const double currAngleDiff = fabs(currState.ST_theta);
 		
@@ -300,9 +305,9 @@ if(useWebcamForVision) {
 			linear_regime_alpha = 0.0;
 		}
 		
-		requested_PWM += requested_PWM_linear*linear_regime_alpha; //LQR controls position as well as angle
+		requested_PWM += requested_PWM_linear*LQR_control_scalar*linear_regime_alpha; //LQR controls position as well as angle
 		
-		requested_PWM += requested_PWM_swingup*(1.0 - linear_regime_alpha);
+		//requested_PWM += requested_PWM_swingup*(1.0 - linear_regime_alpha);
 		
 		//requested_PWM += mycontroller_position.GetControl(currState, frametime) * (1.0 - linear_regime_alpha);
 		
@@ -312,6 +317,8 @@ if(useWebcamForVision) {
 		}
 		
 		arduinoCommunicator.SendByte(ConvertPWMtoArduinoByte(requested_PWM));
+		my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
+												requested_PWM*my_pcsys_constants.uscalar);
 #endif
 	}
 	
@@ -341,6 +348,9 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 	}
 	else if(sf::Joystick::isButtonPressed(0,0)) {
 		LQR_control_enabled_overriding_joystick = false;
+	}
+	if(sf::Joystick::isButtonPressed(0,3)) {
+		last_pend_angle_additional = 1.0;
 	}
 	
 	if(sf::Joystick::isButtonPressed(0,4)) {

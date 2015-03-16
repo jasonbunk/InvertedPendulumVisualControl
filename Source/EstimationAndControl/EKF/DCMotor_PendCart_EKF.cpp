@@ -147,15 +147,15 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 		cv::Mat Kk = cv::Mat::zeros(4,2,CV_64F);
 		
 		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
-			Kk.at<double>(0,0) = 0.99;
-			Kk.at<double>(2,1) = 0.99;
+			Kk.at<double>(0,0) = 0.95;
+			Kk.at<double>(2,1) = 0.95;
 			
 			last_few_ytilda_theta.push_back(fabs(ytilda.POSMEAS__theta)); //use absolute value, for deviation distance
 			last_few_ytilda_cartx.push_back(fabs(ytilda.POSMEAS__cartx));
 			
 			assert(num_recent_ytildas_to_consider == 3); //we'll use a formula for 3 element lists
 			
-			cout<<"theta meas: "<<possibly_given_measurement->data.POSMEAS__theta<<endl;
+			//cout<<"theta meas: "<<possibly_given_measurement->data.POSMEAS__theta<<endl;
 			
 			if(last_few_ytilda_theta.size() > num_recent_ytildas_to_consider) {
 				last_few_ytilda_theta.pop_front();
