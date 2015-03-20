@@ -29,6 +29,11 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	bool historyStartedRecently;
 	bool isRecording;
 	
+	bool enableSineWave;
+	double omegasinfreq;
+	double sinewaveenabledstarttime;
+	bool enableAnotherBumperSpeedChange;
+	
 //--------------------------------------------------
 	double drawn_but_not_physical__cart_limits;
 	double drawn_but_not_physical__cart_limits_inner;

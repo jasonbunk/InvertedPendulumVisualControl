@@ -129,6 +129,7 @@ def PlotVariableAgainstOther(varBlue, varnameBlue, varRed, varnameRed, extraVarX
 		ax1.plot(extra2VarX, extra2VarY, '.r')
 	ax1.grid(True,'both')
 	ax1.set_title(giventitle)
+	ax1.set_xlim([0,1.5])
 	ax1.set_xlabel('time (s)')
 	ax1.set_ylabel(varnameBlue, color='b')
 	for tl in ax1.get_yticklabels():

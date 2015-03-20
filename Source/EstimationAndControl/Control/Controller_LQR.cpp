@@ -51,10 +51,27 @@ if(ST_size_rows > 4) {
 	
 } else {
 	//15cm pendulum LQR with LQR-weights Qtheta=1, Qx=50, Ru=100
+#if 0
+	K.at<double>(0,0) = 3.7389;
+	K.at<double>(0,1) = 0.4542;
+	K.at<double>(0,2) = -1.4019;
+	K.at<double>(0,3) = -2.5599;
+#elif 0
+	K.at<double>(0,0) = 4.7541;
+	K.at<double>(0,1) = 0.5789;
+	K.at<double>(0,2) = -4.2006;
+	K.at<double>(0,3) = -3.3230;
+#elif 1
+	K.at<double>(0,0) = 4.1118;
+	K.at<double>(0,1) = 0.5000;
+	K.at<double>(0,2) = -2.4271;
+	K.at<double>(0,3) = -2.8399;
+#else
 	K.at<double>(0,0) = 2.9916;
 	K.at<double>(0,1) = 0.2478;
 	K.at<double>(0,2) = -0.6950;
 	K.at<double>(0,3) = -2.1655;
+#endif
 	if(ST_size_rows > 4) {
 		K.at<double>(0,4) = 0.0;
 	}

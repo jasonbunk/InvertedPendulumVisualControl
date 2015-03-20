@@ -41,6 +41,11 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	historySaved.Init(10*1000);
 	historyStartedRecently = false;
 	
+	enableSineWave = false;
+	sinewaveenabledstarttime = 0.0;
+	omegasinfreq = 4.0;
+	enableAnotherBumperSpeedChange = true;
+	
     if(mypcart != nullptr) {
         delete mypcart;
     }
@@ -202,8 +207,31 @@ if(useWebcamForVision) {
 	mypcart->myPhysics->given_control_force_u = (requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
 #else
 
-
-	if(LQR_control_enabled_overriding_joystick == false)
+	if(enableSineWave) {
+		
+			requested_PWM = sin(physmath::TWO_PI * omegasinfreq * (simulation_time_elapsed_mytracker - sinewaveenabledstarttime));
+			
+			uint8_t signalByte = ConvertPWMtoArduinoByte(requested_PWM);
+			arduinoCommunicator.SendByte(signalByte);
+			
+			if(isRecording) {
+				cv::Mat currState;
+				if(useWebcamForVision) {
+					currState = my_kalman_filter.GetLatestState();
+				} else {
+					currState = cv::Mat::zeros(ST_size_rows,1,CV_64F);
+					currState.ST_theta = mypcart->get__theta();
+					currState.ST_omega = mypcart->get__omega();
+					currState.ST_cartx = mypcart->get__cartx();
+					currState.ST_cartx_dot = mypcart->get__cartvel();
+				}
+				currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
+				historySaved.InsertCurrentState(currState, requested_PWM);
+			}
+			my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
+												requested_PWM*my_pcsys_constants.uscalar);
+			
+	} else if(LQR_control_enabled_overriding_joystick == false)
 	{
 		const double joystick_deadzone = 20.0;
 		
@@ -348,7 +376,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 	else if(sf::Joystick::isButtonPressed(0,0)) {
 		LQR_control_enabled_overriding_joystick = false;
 	}
-	if(sf::Joystick::isButtonPressed(0,3)) {
+	/*if(sf::Joystick::isButtonPressed(0,3)) {
 		last_pend_angle_additional = 1.0;
 	}
 	
@@ -359,8 +387,31 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 		last_pend_angle_additional = 1.0;
 	} else {
 		last_pend_angle_additional = 0.0;
+	}*/
+	
+	if(sf::Joystick::isButtonPressed(0,7)) {
+		enableSineWave = true;
+		sinewaveenabledstarttime = simulation_time_elapsed_mytracker;
+	} else if(sf::Joystick::isButtonPressed(0,6)) {
+		enableSineWave = false;
 	}
 	
+	if(enableSineWave) {
+		bool hasPovY = sf::Joystick::hasAxis(0, sf::Joystick::PovY);
+		float povY = hasPovY ? sf::Joystick::getAxisPosition(0, sf::Joystick::PovY) : 0;
+		if(povY < -90.0f && enableAnotherBumperSpeedChange) {
+			omegasinfreq *= 1.03;
+			enableAnotherBumperSpeedChange = false;
+		}
+		else if(povY > 90.0f && enableAnotherBumperSpeedChange) {
+			omegasinfreq *= (1.0/1.03);
+			enableAnotherBumperSpeedChange = false;
+		} else if(hasPovY && fabs(povY) < 10.0f) {
+			enableAnotherBumperSpeedChange = true;
+		}
+	}
+	
+#if 0
 	if(sf::Joystick::isButtonPressed(0,7)) {
 		isRecording = true;
 		if(historyStartedRecently == false) {
@@ -373,6 +424,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 		historySaved.WriteToFile("saved_history_est.txt", "saved_history_real_theta.txt", "saved_history_real_omega.txt", "saved_history_real_cartx.txt", "saved_history_real_cartvel.txt");
 		historyStartedRecently = false;
 	}
+#endif
 	
 	/*if(sf::Joystick::isButtonPressed(0,4)) {
 		mypcart->myPhysics->given_control_force_u_alt_secondary_source = 1.0;
