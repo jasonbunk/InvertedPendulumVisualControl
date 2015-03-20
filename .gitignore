@@ -13,3 +13,6 @@ output/*
 
 #ignore valgrind/callgrind files
 callgrind.out.*
+
+#ignore saved measurement history files
+saved_history_*.txt

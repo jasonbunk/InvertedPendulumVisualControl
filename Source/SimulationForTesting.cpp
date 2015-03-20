@@ -21,7 +21,7 @@ using std::cout; using std::endl;
 
 
 #define LQR_SIMULATION 1
-#define LQR_CONTROL 1
+#define LQR_CONTROL 0
 //#define FULLSTATE_NL_CONTROL 1
 //#define USE_KALMANFILTER_FOR_ESTIMATION 1
 //#define KALMAN_IS_REALTIME_NOT_EXTRAPOLATED 1
@@ -30,7 +30,11 @@ using std::cout; using std::endl;
 void SimulationForTesting::InitBeforeSimStart()
 {
 	simulation_time_elapsed_mytracker = 0.0;
+#if LQR_CONTROL
 	LQR_control_enabled_overriding_joystick = true;
+#else
+	LQR_control_enabled_overriding_joystick = false;
+#endif
 	
 	
     if(mypcart != nullptr) {
@@ -101,7 +105,11 @@ void SimulationForTesting::InitBeforeSimStart()
 	myComputerVisionPendulumFinder.InitializeNow();
 	//-------------------------------------------------------
 	
+#if LQR_CONTROL
 	SystemIsPaused = true;
+#else
+	SystemIsPaused = false;
+#endif
 	simulation_time_elapsed_mytracker = gGameSystem.GetTimeElapsed();
 	cout<<"sim time since program start (time spent calibrating): "<<simulation_time_elapsed_mytracker<<endl;
 
@@ -120,7 +128,9 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 	simulation_time_elapsed_mytracker += frametime;
 	double requested_PWM = 0.0;
 	
+#if LQR_CONTROL
 	if(LQR_control_enabled_overriding_joystick == false)
+#endif
 	{
 		const double joystick_deadzone = 20.0;
 		
@@ -153,10 +163,11 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 			//std::cout<<"byte sent to Arduino: "<<((int)signalByte)<<std::endl;
 			
 			//inputVal *= 0.0;
-			inputVal = 0.5;
+			//inputVal = 0.5;
 			mypcart->myPhysics->given_control_force_u = inputVal*my_pcsys_constants.uscalar;
 		}
 	}
+#if LQR_CONTROL
 	else { //LQR control enabled by button press
 		
 		cv::Mat currState(ST_size_rows,1,CV_64F);
@@ -205,10 +216,12 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 			linear_regime_alpha = 0.0;
 		}
 		
+#if LQR_CONTROL
 		requested_PWM += requested_PWM_linear*linear_regime_alpha; //LQR controls position as well as angle
 		
 		requested_PWM += requested_PWM_swingup*(1.0 - linear_regime_alpha);
-		
+#endif
+
 		//requested_PWM += mycontroller_position.GetControl(currState, frametime) * (1.0 - linear_regime_alpha);
 		
 		
@@ -227,6 +240,7 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 		requested_PWM = 0.5;
 		mypcart->myPhysics->given_control_force_u = requested_PWM*my_pcsys_constants.uscalar;
 	}
+#endif
 	
 	
 	double forceApplied = mypcart->myPhysics->given_control_force_u;

@@ -229,10 +229,8 @@ if(useWebcamForVision) {
 				}
 				inputVal = ((fabs(inputVal) - joystick_deadzone) / (100.0 - joystick_deadzone)) * (inputVal/fabs(inputVal));
 			}
-			
 			// inputVal is now normalized to the range [-1...0...1]
 			
-			inputVal *= -1.0; //sign fix
 			
 			inputVal += last_pend_angle_additional;
 			
@@ -261,7 +259,7 @@ if(useWebcamForVision) {
 				historySaved.InsertCurrentState(currState, requested_PWM);
 			}
 			my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
-												-1.0*requested_PWM*my_pcsys_constants.uscalar);
+												requested_PWM*my_pcsys_constants.uscalar);
 		}
 	}
 	else { //LQR control enabled by button press
@@ -277,6 +275,7 @@ if(useWebcamForVision) {
 			currState.ST_cartx_dot = mypcart->get__cartvel();
 		}
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
+		cout<<"currState.ST_theta == "<<currState.ST_theta<<endl;
 		
 		const double linearized_MINangle = 45.0 * (physmath::PI/180.0);
 		const double linearized_MAXangle = 55.0 * (physmath::PI/180.0);
@@ -294,10 +293,10 @@ if(useWebcamForVision) {
 		
 		
 #if LQR_CONTROL
-		double requested_PWM_linear = mycontroller_LQR.GetControl(currState, frametime);
+		double requested_PWM_linear = -1.0*mycontroller_LQR.GetControl(currState, frametime);
 		//requested_PWM_linear *= requested_PWM_linear;
 		
-		requested_PWM_linear = sin(physmath::TWO_PI * 2.0 * simulation_time_elapsed_mytracker);
+		//requested_PWM_linear = sin(physmath::TWO_PI * 2.0 * simulation_time_elapsed_mytracker);
 		
 		
 		last_LQR_control_PWM = requested_PWM_linear;// = 0.0;// = 0.5*(requested_PWM_linear + last_LQR_control_PWM);
@@ -324,7 +323,7 @@ if(useWebcamForVision) {
 		}
 		arduinoCommunicator.SendByte(ConvertPWMtoArduinoByte(requested_PWM));
 		my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
-												-1.0*requested_PWM*my_pcsys_constants.uscalar);
+												requested_PWM*my_pcsys_constants.uscalar);
 #endif
 	}
 	
@@ -355,9 +354,9 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 	
 	
 	if(sf::Joystick::isButtonPressed(0,4)) {
-		last_pend_angle_additional = 1.0;
-	} else if(sf::Joystick::isButtonPressed(0,5)) {
 		last_pend_angle_additional = -1.0;
+	} else if(sf::Joystick::isButtonPressed(0,5)) {
+		last_pend_angle_additional = 1.0;
 	} else {
 		last_pend_angle_additional = 0.0;
 	}

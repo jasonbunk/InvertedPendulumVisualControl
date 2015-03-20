@@ -37,7 +37,7 @@ static void Dilation(cv::Mat & givenMat, int type, int ksize)
 }
 
 
-double ImageProcessor::GetPendAngleFromSegmentedImg(cv::Mat * segImgForCart, cv::Mat * segImgForPend,
+void ImageProcessor::GetPendAngleFromSegmentedImg(cv::Mat * segImgForCart, cv::Mat * segImgForPend,
 													bool drawstuff,
 													double cart_x, double cart_y, double & returned_theta,
 													cv::Mat * returnedDrawnHere /*= nullptr*/) const
@@ -216,7 +216,7 @@ double ImageProcessor::ConvertCartXFromPixelCoords(double raw_pixel_x)
 
 double ImageProcessor::ConvertThetaFromPixelCoords(double raw_theta)
 {
-	return physmath::differenceBetweenAnglesSigned(raw_theta, angle_when_vertical);
+	return -1.0*physmath::differenceBetweenAnglesSigned(raw_theta, angle_when_vertical);
 }
 
 

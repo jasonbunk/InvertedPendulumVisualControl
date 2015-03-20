@@ -62,8 +62,13 @@ if(ST_size_rows > 4) {
 	
 	cv::Mat retval = (K*state);
 	assert(retval.rows == 1 && retval.cols == 1);
-	return -1.0*retval.at<double>(0,0);
+	return retval.at<double>(0,0);
 }
+
+
+
+
+
 
 
 

@@ -31,7 +31,7 @@ public:
 	void LoadCalibrationFromFile(std::string filename);
 	void SaveCalibrationToFile(std::string filename);
 	
-	double GetPendAngleFromSegmentedImg(cv::Mat * segImgForCart, cv::Mat * segImgForPend,
+	void GetPendAngleFromSegmentedImg(cv::Mat * segImgForCart, cv::Mat * segImgForPend,
 											bool drawstuff,
 											double cart_x, double cart_y, double & returned_theta,
 											cv::Mat * returnedDrawnHere = nullptr) const;

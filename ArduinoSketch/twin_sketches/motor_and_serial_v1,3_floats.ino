@@ -97,6 +97,8 @@ int GetAdjustedMotorSpeedMagnitude(int desiredMotorSpeed)
 /*==========================================================================================
   MAIN LOOP
 */
+float lastMotorSetspeed = 0.0f;
+
 void loop()
 {
   tooFarRightRecentMeasurement = digitalRead(TooFarRightPin);
@@ -118,12 +120,14 @@ void loop()
     }
     
     //refuse movements that would cause the cart to slam into the sides
-    if(NewMotorSpeed > 0 && tooFarRightRecentMeasurement != LOW) {
+    if(NewMotorSpeed < 0 && tooFarRightRecentMeasurement != LOW) {
       NewMotorSpeed = 0;
     }
-    if(NewMotorSpeed < 0 && tooFarLLeftRecentMeasurement != LOW) {
+    if(NewMotorSpeed > 0 && tooFarLLeftRecentMeasurement != LOW) {
       NewMotorSpeed = 0;
     }
+    NewMotorSpeed = (int)(0.5f*(((int)NewMotorSpeed) + lastMotorSetspeed));
+    lastMotorSetspeed = (float)NewMotorSpeed;
     
     //check if the motor speed is different than what the motor already is
     if(NewMotorSpeed != LastSetMotorSpeed)

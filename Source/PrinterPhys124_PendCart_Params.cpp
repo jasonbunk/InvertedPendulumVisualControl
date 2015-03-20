@@ -64,9 +64,9 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     consts.g = 9.81;
     
 //----------------------------------------
-    consts.m = PENDMASS;
+    consts.m = 2.0*PENDMASS;
     
-	consts.Ipc = PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
+	consts.Ipc = 5.0 * PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
     
     consts.l = (0.5 * PENDLEN);
     
@@ -75,7 +75,7 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     cout<<"Ipc == "<<consts.Ipc<<endl;
 //----------------------------------------
     
-    consts.kp = frictionless ? 0.0 : 0.0012;
+    consts.kp = frictionless ? 0.0 : 0.0009;
     
     consts.MC = (CARTMASS + BELTEQUIVALENTMASS);
     consts.kc = frictionless ? 0.0 : CART_FRICTION_KC;
