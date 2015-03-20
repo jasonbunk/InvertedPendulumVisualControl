@@ -64,11 +64,11 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     consts.g = 9.81;
     
 //----------------------------------------
-    consts.m = 2.0*PENDMASS;
+    consts.m = 2.5*PENDMASS;
     
-	consts.Ipc = 5.0 * PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
+	consts.Ipc = 7.3 * PENDMASS * (PENDLEN*PENDLEN + PENDWID*PENDWID) / 12.0;
     
-    consts.l = (0.5 * PENDLEN);
+    consts.l = (0.51 * PENDLEN);
     
     cout<<"PENDULUM IS MODELED AS A RECTANGLE WITH DIMENSIONS: "<<(PENDLEN*100.0)<<"x"<<(PENDWID*100.0)<<" (cm) with mass: "<<(PENDMASS*1000.0)<<" grams"<<endl;
     cout<<"L^2*m == "<<(consts.l*consts.l*consts.m)<<endl;
@@ -106,7 +106,7 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
 	consts.omega_measurement_noise_stddev = 0.25;
 	consts.cart_vel_measurement_noise_stddev = 0.039;
 	
-	consts.pendulum_process_noise_accelerations_stddev = 0.5;
+	consts.pendulum_process_noise_accelerations_stddev = 0.45;
 	consts.cart_x_process_noise_accelerations_stddev = 0.5;
 	
 //--------------------------------------------

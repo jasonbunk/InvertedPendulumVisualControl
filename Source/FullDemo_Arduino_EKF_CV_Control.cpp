@@ -275,7 +275,7 @@ if(useWebcamForVision) {
 			currState.ST_cartx_dot = mypcart->get__cartvel();
 		}
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
-		cout<<"currState.ST_theta == "<<currState.ST_theta<<endl;
+		//cout<<"currState.ST_theta == "<<currState.ST_theta<<endl;
 		
 		const double linearized_MINangle = 45.0 * (physmath::PI/180.0);
 		const double linearized_MAXangle = 55.0 * (physmath::PI/180.0);
