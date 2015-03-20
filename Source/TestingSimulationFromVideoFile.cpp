@@ -95,7 +95,7 @@ void TestingSimulationFromVideoFile::InitBeforeSimStart()
 #if LQR_SIMULATION or DO_REAL_CV_FOLLOWING
 //====================================================================================================
 // Initialize Kalman Filter
-	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(4,1,CV_64F);
+	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(ST_size_rows,1,CV_64F);
 	initial_state_for_Kalman.ST_theta   = mypcart->get__theta();
     initial_state_for_Kalman.ST_omega   = mypcart->get__omega();
     initial_state_for_Kalman.ST_cartx   = mypcart->get__cartx();
@@ -209,7 +209,7 @@ void TestingSimulationFromVideoFile::UpdateSystemStuff_OncePerFrame(double frame
 	//arduinoCommunicator.UpdateLEDblinker(frametime);
 	
 #if FULLSTATE_NL_CONTROL
-	cv::Mat currState(4,1,CV_64F);
+	cv::Mat currState(ST_size_rows,1,CV_64F);
 	currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 	currState.ST_omega = mypcart->get__omega();
 	currState.ST_cartx = mypcart->get__cartx();
@@ -280,7 +280,7 @@ void TestingSimulationFromVideoFile::UpdateSystemStuff_OncePerFrame(double frame
 	{
 #if ALWAYS_DO_JOYSTICK_CONTROL
 #elif !DO_REAL_CONTROLLER_BASED_ON_CV
-		cv::Mat currState(4,1,CV_64F);
+		cv::Mat currState(ST_size_rows,1,CV_64F);
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 		currState.ST_omega = mypcart->get__omega();
 		currState.ST_cartx = mypcart->get__cartx();

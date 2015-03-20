@@ -24,10 +24,10 @@
 double ScoreThatFrame(phys::iphys_dcmotor22_pendcart * testCart) {
 	double scorescalar = 1.0;
 	
-	if(fabs(testCart->get__cartx()) > PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS_MODERATE) {
+	if(fabs(testCart->get__cartx()) > PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS) {
 		scorescalar = 1000.0;
-	} else if(fabs(testCart->get__cartx()) > PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS) {
-		scorescalar = 500.0;
+	} else if(fabs(testCart->get__cartx()) > (PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS*0.9)) {
+		scorescalar = 200.0;
 	}
 	
 	double t1 = (20.0 / physmath::PI) * fabs(physmath::differenceBetweenAnglesSigned(0.0, testCart->get__theta()));

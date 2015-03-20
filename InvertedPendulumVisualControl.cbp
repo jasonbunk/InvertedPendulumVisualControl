@@ -84,6 +84,12 @@
 		<Unit filename="Source/Arduino/ArduinoSerial.h">
 			<Option virtualFolder="Arduino/" />
 		</Unit>
+		<Unit filename="Source/DrivenCosineOscillationTest.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/DrivenCosineOscillationTest.h">
+			<Option virtualFolder="main/" />
+		</Unit>
 		<Unit filename="Source/EstimationAndControl/CV_PendCart_Measurer.cpp">
 			<Option virtualFolder="EstimationAndControl/" />
 		</Unit>
@@ -217,6 +223,12 @@
 			<Option virtualFolder="main/" />
 		</Unit>
 		<Unit filename="Source/SFML_Inputs.h">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/SimUtilsShared.cpp">
+			<Option virtualFolder="main/" />
+		</Unit>
+		<Unit filename="Source/SimUtilsShared.h">
 			<Option virtualFolder="main/" />
 		</Unit>
 		<Unit filename="Source/SimplerGameSimSystem.h">

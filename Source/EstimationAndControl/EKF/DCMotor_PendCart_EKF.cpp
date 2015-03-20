@@ -27,6 +27,8 @@ using std::cout; using std::endl;
 //#define ONLY_TALK_FOR_KGAIN 1
 //#define SAY_XVEC_EVEN_IF_ONLY_TALKING_FOR_KGAIN 1
 
+//#define USE_LUENBERGER_OBSERVER 1
+
 static int exit_counter_when_reached = 4;
 
 
@@ -62,34 +64,31 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 	//======================================================================================
 	// Predict
 	
+#if USE_LUENBERGER_OBSERVER
+#else
 	// calculate matrices
 	//
 	cv::Mat Fkm1_J(GetJacobianFmat(dt, state_history.back()->xvec, current_control_u));
 	cv::Mat Fkm1_J_T;
 	cv::transpose(Fkm1_J, Fkm1_J_T);
 	cv::Mat Qkm1(GetQmat(dt, state_history.back()->xvec));
-	
+#endif
 	
 	// predicted states
 	//
 	cv::Mat x_k_km1  =  function_step_time_xvec(dt, state_history.back()->xvec, current_control_u);
-	//cv::Mat x_k_km1  =  Fkm1_J * state_history.back().xvec; //works for small angles
+	//cv::Mat x_k_km1  =  (Fkm1_J * state_history.back()->xvec) + (GetControlBMat(dt) * current_control_u); //works for small angles
+	//cv::Mat x_k_km1 = (ExperimentalGetFmatLinearized(dt) * state_history.back()->xvec) + (GetControlBMat(dt) * current_control_u);
+	if(possibly_given_control_u == nullptr) {
+		cout<<"control B mat used ZERO CONTROL when updating, causing the controller signal to relax briefly towards zero"<<endl;
+	}
 	
-	//for LQR testing
-	//cv::Mat x_k_km1 = (ExperimentalGetFmatLinearized(dt)*state_history.back().xvec) + (GetControlBMat(dt)*current_control_u);
-	
-	
-	/*std::cout<<"======================================"<<std::endl<<std::endl;
-	std::cout<<x_k_km1<<std::endl;
-	std::cout<<"======================================"<<std::endl<<std::endl;
-	exit_counter_when_reached--;
-	if(exit_counter_when_reached <= 0) {
-		exit(0);
-	}*/
-	
-	
-	
+#if USE_LUENBERGER_OBSERVER
+	cv::Mat P_k_km1  =  state_history.back()->Pmat;
+#else
 	cv::Mat P_k_km1  =  Fkm1_J*(state_history.back()->Pmat)*Fkm1_J_T + Qkm1;
+#endif
+	
 	
 	//======================================================================================
 	// Update (if measurement is available)
@@ -131,31 +130,13 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 			ytilda.POSMEAS__theta = physmath::differenceBetweenAnglesSigned(possibly_given_measurement->data.POSMEAS__theta, Hk_times_xkkm1.POSMEAS__theta);
 		}
 		
-#if 0
-		cv::Mat Sk = (Hk*P_k_km1*HkT) + Rmat;
-		cv::Mat Sk_inverted;
-		double checksingular = cv::invert(Sk, Sk_inverted); //must be invertible
-		assert(checksingular != 0.0);
-		
-		/*
-			Calculate Kalman gain matrix Kk
-		*/
-		cv::Mat Kk = P_k_km1 * HkT * Sk_inverted;
-#else
-		//note: ytilda is: 2 rows, 1 column
-		//fixed gain matrix: 4 rows, 2 columns
-		cv::Mat Kk = cv::Mat::zeros(4,2,CV_64F);
 		
 		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
-			Kk.at<double>(0,0) = 0.95;
-			Kk.at<double>(2,1) = 0.95;
 			
 			last_few_ytilda_theta.push_back(fabs(ytilda.POSMEAS__theta)); //use absolute value, for deviation distance
 			last_few_ytilda_cartx.push_back(fabs(ytilda.POSMEAS__cartx));
 			
 			assert(num_recent_ytildas_to_consider == 3); //we'll use a formula for 3 element lists
-			
-			//cout<<"theta meas: "<<possibly_given_measurement->data.POSMEAS__theta<<endl;
 			
 			if(last_few_ytilda_theta.size() > num_recent_ytildas_to_consider) {
 				last_few_ytilda_theta.pop_front();
@@ -173,8 +154,6 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 			}
 		
 		} else if(possibly_given_measurement->type == CV_PendCart_Measurement::velocities) {
-			Kk.at<double>(1,0) = 0.25;
-			Kk.at<double>(3,1) = 0.25;
 			
 			last_few_ytilda_omega.push_back(fabs(ytilda.VELMEAS__omega)); //use absolute value, for deviation distance
 			last_few_ytilda_cartv.push_back(fabs(ytilda.VELMEAS__cartv));
@@ -197,13 +176,44 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 			}
 		}
 		
-		//Kk.at<double>(0,0) = 0.5;
-		//Kk.at<double>(1,1) = 0.5;
+		
+		
+#if USE_LUENBERGER_OBSERVER
+		cout<<"using luenberger observer"<<endl;
+		
+		//note: ytilda is: 2 rows, 1 column
+		//fixed gain matrix: ST_size_rows rows, 2 columns
+		cv::Mat Kk;
+		HkT.copyTo(Kk);
+		
+		if(possibly_given_measurement->type == CV_PendCart_Measurement::positions) {
+			Kk *= 0.9;
+		} else if(possibly_given_measurement->type == CV_PendCart_Measurement::velocities) {
+			Kk *= 0.5;
+		}
+#else
+		cv::Mat Sk = (Hk*P_k_km1*HkT) + Rmat;
+		cv::Mat Sk_inverted;
+		double checksingular = cv::invert(Sk, Sk_inverted); //must be invertible
+		//assert(checksingular != 0.0);
+		//if(checksingular != 0.0) {
+			//cout<<"warning: Kalman matrix Sk was singular, so pseudo-inverse was used"<<endl;
+		//}
+		
+		/*
+			Calculate Kalman gain matrix Kk
+		*/
+		cv::Mat Kk = P_k_km1 * HkT * Sk_inverted;
 #endif
 		
 		
 		cv::Mat x_k_k = x_k_km1 + (Kk*ytilda);
-		cv::Mat P_k_k = (cv::Mat::eye(4,4,CV_64F) - (Kk*Hk))*P_k_km1;
+		
+#if USE_LUENBERGER_OBSERVER
+		cv::Mat P_k_k = P_k_km1;
+#else
+		cv::Mat P_k_k = (cv::Mat::eye(ST_size_rows,ST_size_rows,CV_64F) - (Kk*Hk))*P_k_km1;
+#endif
 		
 		state_history.push_back(new pcstate_class());
 		state_history.back()->timestamp = (curr_sim_time + dt);
@@ -241,12 +251,16 @@ void dcmotor_pendcart_EKF::_SingleUpdateStep(double dt, CV_PendCart_Measurement 
 #define _ST_CARTXDOT state.ST_cartx_dot
 #define _ST_THETA state.ST_theta
 #define _ST_OMEGA state.ST_omega
+#define _ST_F state.ST_F
 
 
 cv::Mat dcmotor_pendcart_EKF::GetControlBMat(double dt) const
 {
-	cv::Mat retval = cv::Mat::zeros(4,1,CV_64F);
+	cv::Mat retval = cv::Mat::zeros(ST_size_rows,1,CV_64F);
 
+if(ST_size_rows > 4) {
+	retval.at<double>(4,0) = dt / pcsys.sdtau;
+} else {
 const double mpMC = (_pm + _MC);
 const double denompart = _plc*_plc*_pm*_MC + _Ipc*mpMC;
 const double glm = _gravg*_pm*_plc;
@@ -257,7 +271,8 @@ const double IpcPl2m = (_Ipc+_plc*_plc*_pm);
 	
 	retval.at<double>(3,0) = dt * IpcPl2m / denompart;
 	retval.at<double>(2,0) = dt * retval.at<double>(3,0);
-	
+}
+
 return retval;
 }
 
@@ -265,7 +280,7 @@ static bool has_reported_A_and_B_mats = false;
 
 cv::Mat dcmotor_pendcart_EKF::ExperimentalGetFmatLinearized(double dt) const
 {
-	cv::Mat retval = cv::Mat::zeros(4,4,CV_64F);
+	cv::Mat retval = cv::Mat::zeros(ST_size_rows,ST_size_rows,CV_64F);
 
 const double mpMC = (_pm + _MC);
 const double denompart = _plc*_plc*_pm*_MC + _Ipc*mpMC;
@@ -273,55 +288,126 @@ const double glm = _gravg*_pm*_plc;
 const double IpcPl2m = (_Ipc+_plc*_plc*_pm);
 
 
-//------------------------- dtheta (first column)
+if(ST_size_rows > 4) {
+//======================================================================================
+	//------------------------- dtheta (first column)
+	
+	// df2/dtheta
+	retval.at<double>(1,0) = dt * glm * mpMC / denompart;
+	// df1/dtheta
+	retval.at<double>(0,0) = 1.0 + dt*retval.at<double>(1,0);
+	
+	// df4/dtheta
+	retval.at<double>(3,0) = dt * glm*_plc*_pm / denompart;
+	
+	// df3/dtheta
+	retval.at<double>(2,0) = dt * retval.at<double>(3,0);
+	
+	//retval.at<double>(5,0) = 0.0;
+	
+	//------------------------- domega (second column)
+	
+	// df2/domega
+	retval.at<double>(1,1) = 1.0 - dt * _kp*_plc*_MC / denompart;
+	// df1/domega
+	retval.at<double>(0,1) = dt*retval.at<double>(1,1);
+	
+	// df4/domega
+	retval.at<double>(3,1) = dt * _Ipc*_kp / denompart;
+	// df3/domega
+	retval.at<double>(2,1) = dt * retval.at<double>(3,1);
+	
+	//retval.at<double>(5,1) = 0.0;
+	
+	//------------------------- dx (third column)
+	
+	// df2/dx
+	retval.at<double>(1,2) = 0.0;
+	// df1/dx
+	retval.at<double>(0,2) = 0.0;
+	
+	// df4/dx
+	retval.at<double>(3,2) = 0.0;
+	// df3/dx
+	retval.at<double>(2,2) = 1.0;
+	
+	//retval.at<double>(5,2) = 0.0;
+	
+	//------------------------- dvel (fourth column)
+	
+	// df2/dvel
+	retval.at<double>(1,3) = -dt * _kc*_plc*_pm / denompart;
+	// df1/dvel
+	retval.at<double>(0,3) = dt * retval.at<double>(1,3);
+	
+	// df4/dvel
+	retval.at<double>(3,3) = 1.0 - dt*_kc*IpcPl2m / denompart;
+	// df3/dvel
+	retval.at<double>(2,3) = dt * retval.at<double>(3,3);
+	
+	//retval.at<double>(5,3) = 0.0;
+	
+	//-------------------------  dF (fifth column)
+	
+	retval.at<double>(1,4) = dt * _plc*_pm / denompart;
+	retval.at<double>(0,4) = dt * retval.at<double>(1,4);
+	
+	retval.at<double>(3,4) = dt*  IpcPl2m / denompart;
+	retval.at<double>(2,4) = dt * retval.at<double>(3,4);
+	
+	retval.at<double>(4,4) = 1.0 - dt / pcsys.sdtau;
+	
+//======================================================================================
+} else {
+	//------------------------- dtheta (first column)
 
-// df2/dtheta
-retval.at<double>(1,0) = dt * glm * mpMC / denompart;
-// df1/dtheta
-retval.at<double>(0,0) = 1.0 + dt*retval.at<double>(1,0);
+	// df2/dtheta
+	retval.at<double>(1,0) = dt * glm * mpMC / denompart;
+	// df1/dtheta
+	retval.at<double>(0,0) = 1.0 + dt*retval.at<double>(1,0);
 
-// df4/dtheta
-retval.at<double>(3,0) = dt * glm*_plc*_pm / denompart;
+	// df4/dtheta
+	retval.at<double>(3,0) = dt * glm*_plc*_pm / denompart;
 
-// df3/dtheta
-retval.at<double>(2,0) = dt * retval.at<double>(3,0);
+	// df3/dtheta
+	retval.at<double>(2,0) = dt * retval.at<double>(3,0);
 
-//------------------------- domega (second column)
+	//------------------------- domega (second column)
 
-// df2/domega
-retval.at<double>(1,1) = 1.0 - dt * _kp*_plc*_MC / denompart;
-// df1/domega
-retval.at<double>(0,1) = dt*retval.at<double>(1,1);
+	// df2/domega
+	retval.at<double>(1,1) = 1.0 - dt * _kp*_plc*_MC / denompart;
+	// df1/domega
+	retval.at<double>(0,1) = dt*retval.at<double>(1,1);
 
-// df4/domega
-retval.at<double>(3,1) = dt * _Ipc*_kp / denompart;
-// df3/domega
-retval.at<double>(2,1) = dt * retval.at<double>(3,1);
+	// df4/domega
+	retval.at<double>(3,1) = dt * _Ipc*_kp / denompart;
+	// df3/domega
+	retval.at<double>(2,1) = dt * retval.at<double>(3,1);
 
-//------------------------- dx (third column)
+	//------------------------- dx (third column)
 
-// df2/dx
-retval.at<double>(1,2) = 0.0;
-// df1/dx
-retval.at<double>(0,2) = 0.0;
+	// df2/dx
+	retval.at<double>(1,2) = 0.0;
+	// df1/dx
+	retval.at<double>(0,2) = 0.0;
 
-// df4/dx
-retval.at<double>(3,2) = 0.0;
-// df3/dx
-retval.at<double>(2,2) = 1.0;
+	// df4/dx
+	retval.at<double>(3,2) = 0.0;
+	// df3/dx
+	retval.at<double>(2,2) = 1.0;
 
-//------------------------- dvel (fourth column)
+	//------------------------- dvel (fourth column)
 
-// df2/dvel
-retval.at<double>(1,3) = -dt * _kc*_plc*_pm / denompart;
-// df1/dvel
-retval.at<double>(0,3) = dt * retval.at<double>(1,3);
+	// df2/dvel
+	retval.at<double>(1,3) = -dt * _kc*_plc*_pm / denompart;
+	// df1/dvel
+	retval.at<double>(0,3) = dt * retval.at<double>(1,3);
 
-// df4/dvel
-retval.at<double>(3,3) = 1.0 - dt*_kc*IpcPl2m / denompart;
-// df3/dvel
-retval.at<double>(2,3) = dt * retval.at<double>(3,3);
-
+	// df4/dvel
+	retval.at<double>(3,3) = 1.0 - dt*_kc*IpcPl2m / denompart;
+	// df3/dvel
+	retval.at<double>(2,3) = dt * retval.at<double>(3,3);
+}
 
 if(has_reported_A_and_B_mats == false) {
 cout<<"================================================================="<<endl;
@@ -329,7 +415,12 @@ cout<<"linearized matrix for DCM2 system, for fixed time step "<<dt<<endl;
 cout<<"================================================================="<<endl;
 cout<<retval<<endl;
 cout<<"================================================================="<<endl;
-cout<<"Control B-matrix:"<<endl;
+
+if(ST_size_rows > 4) {
+	cout<<"Control B-matrix with tau == "<<pcsys.sdtau<<": "<<endl;
+} else {
+	cout<<"Control B-matrix:"<<endl;
+}
 cout<<GetControlBMat(dt)<<endl;
 cout<<"================================================================="<<endl;
 has_reported_A_and_B_mats = true;
@@ -339,6 +430,8 @@ has_reported_A_and_B_mats = true;
 }
 
 
+//#define CONTROL_SMALL_FORCE_HOTFIX 1
+
 #if 1
 //============================================================================
 // full nonlinear formulation
@@ -347,7 +440,19 @@ has_reported_A_and_B_mats = true;
 double dcmotor_pendcart_EKF::get_g2_term(cv::Mat state, double control_u) const
 {
 const double denompart = 2.0*_Ipc*(_pm+pcsys.MC) + _plc*_plc*_pm*(_pm + 2.0*pcsys.MC - _pm*cos(2.0*_ST_THETA));
-const double kcrvmPWMtsplmrw2sinth = pcsys.kc*_ST_CARTXDOT + _plc*_pm*_ST_OMEGA*_ST_OMEGA*sin(_ST_THETA) - control_u;
+
+double kcrvmPWMtsplmrw2sinth;
+if(ST_size_rows > 4) {
+	kcrvmPWMtsplmrw2sinth = pcsys.kc*_ST_CARTXDOT + _plc*_pm*_ST_OMEGA*_ST_OMEGA*sin(_ST_THETA) - _ST_F;
+} else {
+#if CONTROL_SMALL_FORCE_HOTFIX
+	if(fabs(control_u/PRINTER_CONTROL_SCALAR_U) < 0.15) {
+		//cout<<"control_u hotfix: went from "<<control_u<<" to "<<(control_u*fabs(control_u/(0.15*PRINTER_CONTROL_SCALAR_U)))<<endl;
+		control_u *= fabs(control_u/(0.15*PRINTER_CONTROL_SCALAR_U));
+	}
+#endif
+	kcrvmPWMtsplmrw2sinth = pcsys.kc*_ST_CARTXDOT + _plc*_pm*_ST_OMEGA*_ST_OMEGA*sin(_ST_THETA) - control_u;
+}
 
 return -2.0*_plc*(-_kp*_pm*_ST_OMEGA*cos(_ST_THETA)*cos(_ST_THETA) + (_pm+pcsys.MC)*(_kp*_ST_OMEGA - _gravg*_pm*sin(_ST_THETA)) + _pm*cos(_ST_THETA)*kcrvmPWMtsplmrw2sinth) / denompart;
 }
@@ -356,7 +461,17 @@ double dcmotor_pendcart_EKF::get_g4_term(cv::Mat state, double control_u) const
 {
 const double IpcPl2m = (_Ipc+_plc*_plc*_pm);
 const double denompart = 2.0*_Ipc*(_pm+pcsys.MC) + _plc*_plc*_pm*(_pm + 2.0*pcsys.MC - _pm*cos(2.0*_ST_THETA));
-const double kcrvmPWMtsplmrw2sinth = pcsys.kc*_ST_CARTXDOT + _plc*_pm*_ST_OMEGA*_ST_OMEGA*sin(_ST_THETA) - control_u;
+double kcrvmPWMtsplmrw2sinth;
+if(ST_size_rows > 4) {
+	kcrvmPWMtsplmrw2sinth = pcsys.kc*_ST_CARTXDOT + _plc*_pm*_ST_OMEGA*_ST_OMEGA*sin(_ST_THETA) - _ST_F;
+} else {
+#if CONTROL_SMALL_FORCE_HOTFIX
+	if(fabs(control_u/PRINTER_CONTROL_SCALAR_U) < 0.15) {
+		control_u *= fabs(control_u/(0.15*PRINTER_CONTROL_SCALAR_U));
+	}
+#endif
+	kcrvmPWMtsplmrw2sinth = pcsys.kc*_ST_CARTXDOT + _plc*_pm*_ST_OMEGA*_ST_OMEGA*sin(_ST_THETA) - control_u;
+}
 
 return 2.0*(cos(_ST_THETA)*(_Ipc*_kp*_ST_OMEGA + _gravg*_plc*_plc*_pm*_pm*sin(_ST_THETA)) - IpcPl2m*kcrvmPWMtsplmrw2sinth) / denompart;
 }
@@ -367,11 +482,14 @@ return 2.0*(cos(_ST_THETA)*(_Ipc*_kp*_ST_OMEGA + _gravg*_plc*_plc*_pm*_pm*sin(_S
 
 cv::Mat dcmotor_pendcart_EKF::function_step_time_xvec(double dt, cv::Mat xvec_initial, double control_u) const
 {
-	cv::Mat retval(4,1,CV_64F);
+	cv::Mat retval(ST_size_rows,1,CV_64F);
 	retval.ST_omega = xvec_initial.ST_omega + (dt * get_g2_term(xvec_initial, control_u));
 	retval.ST_cartx_dot = xvec_initial.ST_cartx_dot + (dt * get_g4_term(xvec_initial, control_u));
 	retval.ST_theta = xvec_initial.ST_theta + (dt * retval.ST_omega);		//uses semi-implicit euler
 	retval.ST_cartx = xvec_initial.ST_cartx + (dt * retval.ST_cartx_dot);	//uses semi-implicit euler
+	if(ST_size_rows > 4) {
+		retval.ST_F = xvec_initial.ST_F + dt*((control_u - xvec_initial.ST_F) / pcsys.sdtau);
+	}
 	return retval;
 }
 
@@ -381,7 +499,7 @@ cv::Mat dcmotor_pendcart_EKF::function_step_time_xvec(double dt, cv::Mat xvec_in
 */
 cv::Mat dcmotor_pendcart_EKF::GetJacobianFmat(double dt, cv::Mat state, double control_u) const
 {
-	cv::Mat retval = cv::Mat::zeros(4,4,CV_64F);
+	cv::Mat retval = cv::Mat::zeros(ST_size_rows,ST_size_rows,CV_64F);
 
 //-----------------------------------------------------
 #if 1
@@ -395,6 +513,8 @@ cv::Mat dcmotor_pendcart_EKF::GetJacobianFmat(double dt, cv::Mat state, double c
 	double costh = 1.0;
 	denompart?
 #endif
+
+if(ST_size_rows <= 4) {
 
 const double mpMC = (_pm + pcsys.MC);
 const double denompart = 2.0*_Ipc*mpMC + _plc*_plc*_pm*(_pm + 2.0*pcsys.MC - _pm*cos2th);
@@ -455,7 +575,9 @@ retval.at<double>(0,3) = dt * retval.at<double>(1,3);
 retval.at<double>(3,3) = 1.0 - dt * 2.0*_kc*IpcPl2m / denompart;
 // df3/dvel
 retval.at<double>(2,3) = dt * retval.at<double>(3,3);
-
+} else {
+	cout<<"todo: update Jacobian with the 5th state element, the pretend current"<<endl;
+}
 
 
 	return retval;
@@ -474,7 +596,7 @@ cv::Mat dcmotor_pendcart_EKF::GetQmat(double dt, cv::Mat state) const
 	const double denompart = 2.0*_Ipc*mpMC + _plc*_plc*_pm*(_pm + 2.0*pcsys.MC - _pm*cos2th);
 	const double IpcPl2m = (_Ipc+_plc*_plc*_pm);
 	
-	cv::Mat randforces(4,1,CV_64F);
+	cv::Mat randforces(ST_size_rows,1,CV_64F);
 	randforces.at<double>(1,0) = (2.0*dt*_plc/denompart) * (_pm*costh*pcsys.cart_x_process_noise_accelerations_stddev - (mpMC-_pm*costh*costh)*pcsys.pendulum_process_noise_accelerations_stddev);
 	randforces.at<double>(3,0) = (2.0*dt/denompart) * (IpcPl2m*pcsys.cart_x_process_noise_accelerations_stddev + _Ipc*costh*pcsys.pendulum_process_noise_accelerations_stddev);
 	
@@ -483,6 +605,10 @@ cv::Mat dcmotor_pendcart_EKF::GetQmat(double dt, cv::Mat state) const
 	
 	cv::Mat randforces_transpose;
 	cv::transpose(randforces, randforces_transpose);
+	
+	//cout<<"randforces1 == "<<(GetControlBMat(dt)*pcsys.MC*pcsys.cart_x_process_noise_accelerations_stddev)<<endl;
+	//cout<<"randforces2 == "<<randforces<<endl;
+	
 	return (randforces * randforces_transpose);
 }
 
@@ -491,7 +617,7 @@ cv::Mat dcmotor_pendcart_EKF::GetQmat(double dt, cv::Mat state) const
 */
 cv::Mat dcmotor_pendcart_EKF::GetHmat_PositionsOnly(double dt) const
 {
-	cv::Mat retval = cv::Mat::zeros(2,4,CV_64F);
+	cv::Mat retval = cv::Mat::zeros(2,ST_size_rows,CV_64F);
 	retval.at<double>(0,0) = 1.0; // for theta
 	retval.at<double>(1,2) = 1.0; // for x
 	return retval;
@@ -514,7 +640,7 @@ cv::Mat dcmotor_pendcart_EKF::GetRmat_PositionsOnly(double dt) const
 */
 cv::Mat dcmotor_pendcart_EKF::GetHmat_VelocitiesOnly(double dt) const
 {
-	cv::Mat retval = cv::Mat::zeros(2,4,CV_64F);
+	cv::Mat retval = cv::Mat::zeros(2,ST_size_rows,CV_64F);
 	retval.at<double>(0,1) = 1.0; // for omega
 	retval.at<double>(1,3) = 1.0; // for xvel
 	return retval;

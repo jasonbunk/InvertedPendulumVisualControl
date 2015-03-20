@@ -41,7 +41,7 @@ void SimulationForTesting::InitBeforeSimStart()
 	
     const double initial__omega = 0.0;
 #if LQR_SIMULATION
-    const double initial__theta = ((physmath::PI/180.0) * 18.0);
+    const double initial__theta = ((physmath::PI/180.0) * 0.09);
 #else
     const double initial__theta = ((physmath::PI/180.0) * 180.0);
 #endif
@@ -58,6 +58,7 @@ void SimulationForTesting::InitBeforeSimStart()
     mypcart->myPhysics->positions[0].x = 0.0;
     mypcart->myPhysics->positions[0].y = initial__theta;
     mypcart->myPhysics->velocities[0].Nullify();
+    mypcart->myPhysics->velocities[1].Nullify();
     mypcart->set__omega(initial__omega);
 	
 	mypcart->color[0] = 0;
@@ -66,7 +67,7 @@ void SimulationForTesting::InitBeforeSimStart()
 	
 	allOldEntities.push_back(mypcart);
 	
-	gGameSystem.fixed_time_step = 0.004;
+	gGameSystem.fixed_time_step = 0.001;
 	gGameSystem.fixed_timestep_randomizer__stddev = -0.001; //negative: don't randomizes
 	INTEGRATOR = 5; //fourth-order Runge-Kutta
     stop_entities_that_exit_level_boundaries = false;
@@ -82,22 +83,14 @@ void SimulationForTesting::InitBeforeSimStart()
 	mycontroller_nlswing.Initialize(my_pcsys_constants);
 #endif
 
-#if USE_KALMANFILTER_FOR_ESTIMATION
-//====================================================================================================
-// Initialize Kalman Filter
-	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(4,1,CV_64F);
+	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(ST_size_rows,1,CV_64F);
 	initial_state_for_Kalman.ST_theta   = mypcart->get__theta();
     initial_state_for_Kalman.ST_omega   = mypcart->get__omega();
     initial_state_for_Kalman.ST_cartx   = mypcart->get__cartx();
     initial_state_for_Kalman.ST_cartx_dot=mypcart->get__cartvel();
 	my_kalman_filter.Initialize(simulation_time_elapsed_mytracker, initial_state_for_Kalman, my_pcsys_constants);
 	
-	my_kalman_filter.max_reasonable_measurement_ytilda__theta =  99.2; //good value is at most 6ish
-	my_kalman_filter.max_reasonable_measurement_ytilda__omega = 92.2;
-	my_kalman_filter.max_reasonable_measurement_ytilda__cartx =  96.2;
-	my_kalman_filter.max_reasonable_measurement_ytilda__cartv = 92.2;
-//=====================================================================
-#endif
+	
 	mycontroller_LQR.Initialize(my_pcsys_constants);
 
 	
@@ -127,65 +120,6 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 	simulation_time_elapsed_mytracker += frametime;
 	double requested_PWM = 0.0;
 	
-	
-#if USE_KALMANFILTER_FOR_ESTIMATION
-	CV_PendCart_Raw_Measurement newmeas;
-	newmeas.cartx = SimulatedMeasureCartX();
-	newmeas.theta = SimulatedMeasurePendulumTheta();
-	newmeas.estimated_delay = simulation_time_elapsed_mytracker; //not actually the delay
-	myComputerVisionPendulumFinder.GiveCurrentTrueTimeMeasurement(newmeas);
-	
-	
-	std::vector<CV_PendCart_Raw_Measurement*>* possible_measurements_vec = myComputerVisionPendulumFinder.UpdateAndCheckForMeasurements();
-	
-	if(possible_measurements_vec != nullptr) {
-		std::vector<CV_PendCart_Measurement> processed_measurements;
-		for(int im=0; im<possible_measurements_vec->size(); im++) {
-			//use the last two measurements to calculate a velocity
-			my_pendcart_measurer.GetCompleteStateEstimate(simulation_time_elapsed_mytracker - (*possible_measurements_vec)[im]->estimated_delay,
-															(*possible_measurements_vec)[im]->cartx,
-															(*possible_measurements_vec)[im]->theta,
-															processed_measurements);
-#if KALMAN_IS_REALTIME_NOT_EXTRAPOLATED
-			my_kalman_filter._SingleUpdateStep(frametime, possible_measurement, nullptr);
-			my_kalman_filter.ForceClearStatesExceptLatest();
-#else
-			for(int ii=0; ii<processed_measurements.size(); ii++) {
-				//cout<<"got measurement of type "<<((processed_measurements[ii].type) == CV_PendCart_Measurement::positions ? "POSITION" : "VELOCITY")<<" at time "<<(processed_measurements[ii].timestamp)<<", with values: "<<processed_measurements[ii]<<endl;
-				my_kalman_filter.GiveMeasurement(processed_measurements[ii]);
-			}
-#endif
-			processed_measurements.clear();
-		}
-		delete possible_measurements_vec;
-		possible_measurements_vec = nullptr;
-	}
-#if KALMAN_IS_REALTIME_NOT_EXTRAPOLATED
-	else {
-		my_kalman_filter._SingleUpdateStep(frametime, nullptr, nullptr);
-		my_kalman_filter.ForceClearStatesExceptLatest();
-	}
-#else
-	my_kalman_filter.UpdateToTime(simulation_time_elapsed_mytracker);
-#endif
-#endif
-	
-
-	//arduinoCommunicator.UpdateLEDblinker(frametime);
-	
-#if FULLSTATE_NL_CONTROL
-	cv::Mat currState(4,1,CV_64F);
-	currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
-	currState.ST_omega = mypcart->get__omega();
-	currState.ST_cartx = mypcart->get__cartx();
-	currState.ST_cartx_dot = mypcart->get__cartvel();
-	
-	requested_PWM = mycontroller_nlswing.GetControl(currState, frametime);
-	
-	mypcart->myPhysics->given_control_force_u = (requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
-#else
-
-
 	if(LQR_control_enabled_overriding_joystick == false)
 	{
 		const double joystick_deadzone = 20.0;
@@ -218,21 +152,27 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 			std::cout<<"u== "<<std::setprecision(4)<<u<<", inputVal == "<<std::setprecision(4)<<inputVal<<std::endl;
 			//std::cout<<"byte sent to Arduino: "<<((int)signalByte)<<std::endl;
 			
+			//inputVal *= 0.0;
+			inputVal = 0.5;
 			mypcart->myPhysics->given_control_force_u = inputVal*my_pcsys_constants.uscalar;
 		}
 	}
 	else { //LQR control enabled by button press
 		
-#if USE_KALMANFILTER_FOR_ESTIMATION
-		cv::Mat currState = my_kalman_filter.GetLatestState();
-		currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
-#else
-		cv::Mat currState(4,1,CV_64F);
+		cv::Mat currState(ST_size_rows,1,CV_64F);
 		currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 		currState.ST_omega = mypcart->get__omega();
 		currState.ST_cartx = mypcart->get__cartx();
 		currState.ST_cartx_dot = mypcart->get__cartvel();
-#endif
+		currState.ST_F = mypcart->get__sdF();
+		
+		for(int ii=0; ii<currState.rows; ii++) {
+			if(isnan(currState.at<double>(ii,0))) {
+				cout<<"FATAL ERROR: NaN in state"<<endl;
+				cout<<currState<<endl;
+				exit(1);
+			}
+		}
 		
 		const double linearized_MINangle = 30.0 * (physmath::PI/180.0);
 		const double linearized_MAXangle = 45.0 * (physmath::PI/180.0);
@@ -249,6 +189,12 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 		
 #if LQR_CONTROL
 		double requested_PWM_linear = mycontroller_LQR.GetControl(currState, frametime);
+		
+		if(isnan(requested_PWM_linear)) {
+			cout<<"FATAL ERROR: NaN PWM requested by LQR with frametime "<<frametime<<" and state:"<<endl;
+			cout<<currState<<endl;
+			exit(1);
+		}
 #endif
 		
 		if(currAngleDiff <= linearized_MINangle) {
@@ -270,9 +216,22 @@ void SimulationForTesting::UpdateSystemStuff_OncePerFrame(double frametime)
 			requested_PWM /= fabs(requested_PWM);
 		}
 		
+		if(isnan(requested_PWM)) {
+			cout<<"FATAL ERROR: NaN PWM requested with frametime "<<frametime<<" and state:"<<endl;
+			cout<<currState<<endl;
+			exit(1);
+		}
+		
+		cout<<"requested_PWM_scaled == "<<(requested_PWM*my_pcsys_constants.uscalar)<<",  currState.ST_F == "<<currState.ST_F<<endl;
+		
+		requested_PWM = 0.5;
 		mypcart->myPhysics->given_control_force_u = requested_PWM*my_pcsys_constants.uscalar;
-#endif
 	}
+	
+	
+	double forceApplied = mypcart->myPhysics->given_control_force_u;
+	my_kalman_filter._SingleUpdateStep(frametime, nullptr, &forceApplied);
+	my_kalman_filter.ForceClearStatesExceptLatest();
 }
 
 
@@ -330,14 +289,6 @@ if(text_buffer != nullptr)
 		sprintf____s(text_buffer, "ENERGY: %f",
 					SystemEnergy_GetInternalEnergy(my_pcsys_constants, mypcart->get__theta(), mypcart->get__omega(), mypcart->get__cartx(), mypcart->get__cartvel()));
 	}
-#if USE_KALMANFILTER_FOR_ESTIMATION
-	else if(line_n == 3) {
-			cv::Mat latest_EKF_state;
-			latest_EKF_state = my_kalman_filter.GetLatestState();
-			sprintf____s(text_buffer, "Kalman (theta, omega, x, xdot, LQR_PWMDELT): (%5.3f, %5.3f, %5.3f, %5.3f, %1.2f)", latest_EKF_state.ST_theta, latest_EKF_state.ST_omega, latest_EKF_state.ST_cartx, latest_EKF_state.ST_cartx_dot, latest_LQR_control_PWM);
-			return true;
-	}
-#endif
 	else {return false;}
 	return true;
 }
@@ -345,9 +296,12 @@ if(text_buffer != nullptr)
 }
 
 
+
 static void DrawKalmanCart(cv::Mat givenState, double cartwidth, double cartheight, double boblength, double bobdiam, unsigned char R, unsigned char G, unsigned char B)
 {
 	phys::point center, pendbobpos;
+	
+	givenState.ST_theta *= -1.0;
 	
 	center.x = givenState.ST_cartx;
 	center.y = 0.0;
@@ -378,6 +332,7 @@ static void DrawKalmanCart(cv::Mat givenState, double cartwidth, double cartheig
 	phys::drawing::GLCIRCLE2D(pendbobpos, bobdiam*0.5, 12);
 	glEnd();
 }
+
 
 
 void SimulationForTesting::DrawSystemStuff()
@@ -422,11 +377,10 @@ void SimulationForTesting::DrawSystemStuff()
 	phys::drawing::GLVERT2(phys::point(     drawn_but_not_physical__cart_limits_inner + 0.5*mypcart->myPhysics->drawn_cart_width,  inner_bound_height));
 	
 	glEnd();
-	
-#if USE_KALMANFILTER_FOR_ESTIMATION
+
 	DrawKalmanCart(my_kalman_filter.GetLatestState(), mypcart->myPhysics->drawn_cart_width, mypcart->myPhysics->drawn_cart_height,
 													mypcart->myPhysics->l, mypcart->myPhysics->drawn_bob_diameter, 200, 140, 10);
-#endif
+
 }
 
 

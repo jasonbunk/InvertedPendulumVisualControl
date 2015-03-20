@@ -178,7 +178,7 @@ void InteractiveNonconvexOptimization::UpdateSystemStuff_OncePerFrame(double fra
 		requested_PWM_joystick = inputVal;
 	}
 	
-	cv::Mat currState(4,1,CV_64F);
+	cv::Mat currState(ST_size_rows,1,CV_64F);
 	currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 	currState.ST_omega = mypcart->get__omega();
 	currState.ST_cartx = mypcart->get__cartx();

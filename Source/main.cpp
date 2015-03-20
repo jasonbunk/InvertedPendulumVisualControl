@@ -343,7 +343,7 @@ int main(int argc, char** argv)
 	cout<<"----------"<<endl;
 	cout<<"main arguments:   [render-windows?]"<<endl;
 	cout<<"simulation arguments:  [SIMULATIONTYPE-NUMBER]  [SIM-OPTION]"<<endl;
-	cout<<"    simtypes: 0 == video-based sim,  1 == full demo w/optional webcam,  2 == optimization,  3 == jphysics simulation"<<endl;
+	cout<<"    simtypes: 0 == video-based sim,  1 == full demo w/optional webcam,  2 == optimization,  3 == jphysics sim,  4 == driven cosine oscillation"<<endl;
 	cout<<"    full demo (sim 1) SIM-OPTION arguments:   [WEBCAM? default:yes]   [calibrate webcam?]"<<endl;
 	
 	if(argc < 2) {

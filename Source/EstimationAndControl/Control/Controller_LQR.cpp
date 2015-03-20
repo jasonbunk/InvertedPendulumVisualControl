@@ -34,37 +34,43 @@ void dcm2_controller_inverted_linearized_LQR::Initialize(PendulumCartDCM2_Consta
 
 double dcm2_controller_inverted_linearized_LQR::GetControl(cv::Mat state, double dt_step)
 {
-	cv::Mat K(1,4,CV_64F);
+	cv::Mat K(1,ST_size_rows,CV_64F);
 	
+if(ST_size_rows > 4) {
+	//>> LQR_ip_with_signal_delay_tau(0.04)
+	//control matrix K is:
+    //4.6175    0.4492   -3.1273   -3.7628    0.1272
+	//weights: theta = 1, x = 100, R = 10
+	
+	
+	K.at<double>(0,0) = 4.6175;
+	K.at<double>(0,1) = 0.4492;
+	K.at<double>(0,2) = -3.1273;
+	K.at<double>(0,3) = -3.7628;
+	K.at<double>(0,4) = 0.1272;
+	
+} else {
 	//15cm pendulum LQR with LQR-weights Qtheta=1, Qx=50, Ru=100
 	K.at<double>(0,0) = 2.9916;
 	K.at<double>(0,1) = 0.2478;
 	K.at<double>(0,2) = -0.6950;
 	K.at<double>(0,3) = -2.1655;
-	
-	/*//slightly more aggressive control with wood block
-	K.at<double>(0,0) =  4.2348;
-	K.at<double>(0,1) =  0.7244;
-	K.at<double>(0,2) = -0.3126;
-	K.at<double>(0,3) = -2.0932;
-	
-	//slightly less aggressive control with wood block
-	/*K.at<double>(0,0) =  4.0349;
-	K.at<double>(0,1) =  0.6916;
-	K.at<double>(0,2) = -0.0571;
-	K.at<double>(0,3) = -1.9944;*/
-	
-	//old, without wood block, just the pendulum
-	/*K.at<double>(0,0) =  3.6696;
-	K.at<double>(0,1) =  0.5532;
-	K.at<double>(0,2) = -0.9826;
-	K.at<double>(0,3) = -1.9100;*/
-	
-	//K = cv::Mat::zeros(1,4,CV_64F);
+	if(ST_size_rows > 4) {
+		K.at<double>(0,4) = 0.0;
+	}
+}
 	
 	cv::Mat retval = (K*state);
 	assert(retval.rows == 1 && retval.cols == 1);
 	return -1.0*retval.at<double>(0,0);
 }
+
+
+
+
+
+
+
+
 
 

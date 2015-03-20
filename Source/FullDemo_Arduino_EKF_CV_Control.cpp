@@ -18,6 +18,7 @@ using std::cout; using std::endl;
 #include <fstream>
 #include "Utils/SUtils.h"
 #include "EstimationAndControl/CalculateSystemEnergy.h"
+#include "SimUtilsShared.h"
 
 
 #define LQR_CONTROL 1
@@ -37,6 +38,8 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	arduinoCommunicator.Connect("/dev/ttyACM0", 19200);
 	
 	
+	historySaved.Init(10*1000);
+	historyStartedRecently = false;
 	
     if(mypcart != nullptr) {
         delete mypcart;
@@ -88,7 +91,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 
 //====================================================================================================
 // Initialize Kalman Filter
-	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(4,1,CV_64F);
+	cv::Mat initial_state_for_Kalman = cv::Mat::zeros(ST_size_rows,1,CV_64F);
 	initial_state_for_Kalman.ST_theta   = mypcart->get__theta();
     initial_state_for_Kalman.ST_omega   = mypcart->get__omega();
     initial_state_for_Kalman.ST_cartx   = mypcart->get__cartx();
@@ -96,7 +99,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	my_kalman_filter.Initialize(simulation_time_elapsed_mytracker, initial_state_for_Kalman, my_pcsys_constants);
 	
 	my_kalman_filter.max_reasonable_measurement_ytilda__theta =  99.2; //good value is at most 6ish
-	my_kalman_filter.max_reasonable_measurement_ytilda__omega = 92.2;
+	my_kalman_filter.max_reasonable_measurement_ytilda__omega = 50.2;
 	my_kalman_filter.max_reasonable_measurement_ytilda__cartx =  96.2;
 	my_kalman_filter.max_reasonable_measurement_ytilda__cartv = 92.2;
 //=====================================================================
@@ -119,42 +122,11 @@ void Simulation_FinalDCM2ArduinoKalmanCV::InitBeforeSimStart()
 	SystemIsPaused = false;
 	simulation_time_elapsed_mytracker = gGameSystem.GetTimeElapsed();
 	cout<<"sim time since program start (time spent calibrating): "<<simulation_time_elapsed_mytracker<<endl;
+	isRecording = false;
 
-
-	lastlast_LQR_control_counter = 0;
-	lastlast_LQR_control_PWM = 0.0;
 	last_LQR_control_PWM = 0.0;
-	latest_LQR_control_PWM = 0.0;
-	last_LQR_signal_actually_sent = 0.0;
 }
 
-
-
-static uint8_t ConvertPWMtoArduinoByte(double PWM)
-{
-	// PWM should be normalized to the range [-1...0...1]
-	
-	/*
-		  1-127 maps to (2 to 254)
-			0   maps to 0
-		128-254 maps to (-2 to -254)
-	*/
-	
-	uint8_t signalByte = 0;
-	
-	if(PWM > 0.000001) {
-		signalByte = static_cast<uint8_t>(physmath::RoundDoubleToUnsignedChar(PWM*127.0));
-	} else if(PWM < -0.000001) {
-		signalByte = static_cast<uint8_t>(physmath::RoundDoubleToUnsignedChar(fabs(PWM)*127.0));
-		if(signalByte >= 1) {
-			signalByte += 127;
-		} else {
-			signalByte = 0;
-		}
-	}
-	
-	return signalByte;
-}
 
 
 static double last_pend_angle_additional = 0.0;
@@ -183,6 +155,7 @@ if(useWebcamForVision) {
 				//requested_PWM = 1.0;
 				//last_pend_angle_additional = 1.0;
 			}
+			
 #if KALMAN_IS_REALTIME_NOT_EXTRAPOLATED
 			my_kalman_filter._SingleUpdateStep(frametime, possible_measurement, nullptr);
 			my_kalman_filter.ForceClearStatesExceptLatest();
@@ -190,6 +163,14 @@ if(useWebcamForVision) {
 			for(int ii=0; ii<processed_measurements.size(); ii++) {
 				//cout<<"got measurement of type "<<((processed_measurements[ii].type) == CV_PendCart_Measurement::positions ? "POSITION" : "VELOCITY")<<" at time "<<(processed_measurements[ii].timestamp)<<", with values: "<<processed_measurements[ii]<<endl;
 				my_kalman_filter.GiveMeasurement(processed_measurements[ii]);
+				
+				if(processed_measurements[ii].type == CV_PendCart_Measurement::positions) {
+					historySaved.InsertRealTheta(processed_measurements[ii].data.POSMEAS__theta, processed_measurements[ii].timestamp);
+					historySaved.InsertRealCartx(processed_measurements[ii].data.POSMEAS__cartx, processed_measurements[ii].timestamp);
+				} else if(processed_measurements[ii].type == CV_PendCart_Measurement::velocities) {
+					historySaved.InsertRealOmega(processed_measurements[ii].data.VELMEAS__omega, processed_measurements[ii].timestamp);
+					historySaved.InsertRealCartv(processed_measurements[ii].data.VELMEAS__cartv, processed_measurements[ii].timestamp);
+				}
 			}
 #endif
 			processed_measurements.clear();
@@ -210,7 +191,7 @@ if(useWebcamForVision) {
 	//arduinoCommunicator.UpdateLEDblinker(frametime);
 	
 #if FULLSTATE_NL_CONTROL
-	cv::Mat currState(4,1,CV_64F);
+	cv::Mat currState(ST_size_rows,1,CV_64F);
 	currState.ST_theta = physmath::differenceBetweenAnglesSigned(mypcart->get__theta(), 0.0);
 	currState.ST_omega = mypcart->get__omega();
 	currState.ST_cartx = mypcart->get__cartx();
@@ -253,6 +234,8 @@ if(useWebcamForVision) {
 			
 			inputVal *= -1.0; //sign fix
 			
+			inputVal += last_pend_angle_additional;
+			
 			uint8_t signalByte = ConvertPWMtoArduinoByte(inputVal);
 			
 			//std::cout<<"u== "<<std::setprecision(4)<<u<<", inputVal == "<<std::setprecision(4)<<inputVal<<", signalByte == "<<((int)signalByte)<<std::endl;
@@ -260,10 +243,25 @@ if(useWebcamForVision) {
 			
 			arduinoCommunicator.SendByte(signalByte);
 			
+			//cout<<"input PWM ==  "<<inputVal<<endl;
 			requested_PWM = inputVal;
 			
+			if(isRecording) {
+				cv::Mat currState;
+				if(useWebcamForVision) {
+					currState = my_kalman_filter.GetLatestState();
+				} else {
+					currState = cv::Mat::zeros(ST_size_rows,1,CV_64F);
+					currState.ST_theta = mypcart->get__theta();
+					currState.ST_omega = mypcart->get__omega();
+					currState.ST_cartx = mypcart->get__cartx();
+					currState.ST_cartx_dot = mypcart->get__cartvel();
+				}
+				currState.ST_theta = physmath::differenceBetweenAnglesSigned(currState.ST_theta, 0.0);
+				historySaved.InsertCurrentState(currState, requested_PWM);
+			}
 			my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
-												requested_PWM*my_pcsys_constants.uscalar);
+												-1.0*requested_PWM*my_pcsys_constants.uscalar);
 		}
 	}
 	else { //LQR control enabled by button press
@@ -272,7 +270,7 @@ if(useWebcamForVision) {
 		if(useWebcamForVision) {
 			currState = my_kalman_filter.GetLatestState();
 		} else {
-			currState = cv::Mat::zeros(4,1,CV_64F);
+			currState = cv::Mat::zeros(ST_size_rows,1,CV_64F);
 			currState.ST_theta = mypcart->get__theta();
 			currState.ST_omega = mypcart->get__omega();
 			currState.ST_cartx = mypcart->get__cartx();
@@ -285,18 +283,7 @@ if(useWebcamForVision) {
 		const double linearized_anglerange = (linearized_MAXangle - linearized_MINangle);
 		const double currAngleDiff = fabs(currState.ST_theta);
 		
-		double requested_PWM_swingup = 0.0;//mycontroller_nlswing.GetControl(currState, frametime);
-		
-		if(fabs(requested_PWM_swingup) > 1.0) {
-			requested_PWM_swingup /= fabs(requested_PWM_swingup);
-		}
-		
 		double linear_regime_alpha = 0.0; //  1.0 when fully in linear regime, 0.0 when fully out, interpolates between
-		
-#if LQR_CONTROL
-		double requested_PWM_linear = mycontroller_LQR.GetControl(currState, frametime);
-#endif
-		
 		if(currAngleDiff <= linearized_MINangle) {
 			linear_regime_alpha = 1.0;
 		} else if(currAngleDiff <= linearized_MAXangle) {
@@ -305,10 +292,25 @@ if(useWebcamForVision) {
 			linear_regime_alpha = 0.0;
 		}
 		
+		
+#if LQR_CONTROL
+		double requested_PWM_linear = mycontroller_LQR.GetControl(currState, frametime);
+		//requested_PWM_linear *= requested_PWM_linear;
+		
+		requested_PWM_linear = sin(physmath::TWO_PI * 2.0 * simulation_time_elapsed_mytracker);
+		
+		
+		last_LQR_control_PWM = requested_PWM_linear;// = 0.0;// = 0.5*(requested_PWM_linear + last_LQR_control_PWM);
+#endif
+		
+		/*double requested_PWM_swingup = 0.0;//mycontroller_nlswing.GetControl(currState, frametime);
+		if(fabs(requested_PWM_swingup) > 1.0) {
+			requested_PWM_swingup /= fabs(requested_PWM_swingup);
+		}*/
+		
 		requested_PWM += requested_PWM_linear*LQR_control_scalar*linear_regime_alpha; //LQR controls position as well as angle
 		
 		//requested_PWM += requested_PWM_swingup*(1.0 - linear_regime_alpha);
-		
 		//requested_PWM += mycontroller_position.GetControl(currState, frametime) * (1.0 - linear_regime_alpha);
 		
 		
@@ -316,17 +318,15 @@ if(useWebcamForVision) {
 			requested_PWM /= fabs(requested_PWM);
 		}
 		
+		
+		if(isRecording) {
+			historySaved.InsertCurrentState(currState, requested_PWM);
+		}
 		arduinoCommunicator.SendByte(ConvertPWMtoArduinoByte(requested_PWM));
 		my_kalman_filter.ApplyControlForce(simulation_time_elapsed_mytracker + CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL,
-												requested_PWM*my_pcsys_constants.uscalar);
+												-1.0*requested_PWM*my_pcsys_constants.uscalar);
 #endif
 	}
-	
-	if(fabs(requested_PWM) > 1.0) {
-		requested_PWM /= fabs(requested_PWM);
-	}
-	
-	//requested_PWM = 0.0;
 	
 	if(useWebcamForVision == false) {
 		mypcart->myPhysics->given_control_force_u = -1.0 *(requested_PWM+keyboard_PWM_requested_saved) * my_pcsys_constants.uscalar;
@@ -353,13 +353,35 @@ void Simulation_FinalDCM2ArduinoKalmanCV::RespondToKeyStates()
 		last_pend_angle_additional = 1.0;
 	}
 	
+	
 	if(sf::Joystick::isButtonPressed(0,4)) {
+		last_pend_angle_additional = 1.0;
+	} else if(sf::Joystick::isButtonPressed(0,5)) {
+		last_pend_angle_additional = -1.0;
+	} else {
+		last_pend_angle_additional = 0.0;
+	}
+	
+	if(sf::Joystick::isButtonPressed(0,7)) {
+		isRecording = true;
+		if(historyStartedRecently == false) {
+			historySaved.Clear();
+			historySaved.SetStartTime(simulation_time_elapsed_mytracker);
+			historyStartedRecently = true;
+		}
+	} else if(sf::Joystick::isButtonPressed(0,6)) {
+		isRecording = false;
+		historySaved.WriteToFile("saved_history_est.txt", "saved_history_real_theta.txt", "saved_history_real_omega.txt", "saved_history_real_cartx.txt", "saved_history_real_cartvel.txt");
+		historyStartedRecently = false;
+	}
+	
+	/*if(sf::Joystick::isButtonPressed(0,4)) {
 		mypcart->myPhysics->given_control_force_u_alt_secondary_source = 1.0;
 	} else if(sf::Joystick::isButtonPressed(0,5)) {
 		mypcart->myPhysics->given_control_force_u_alt_secondary_source = -1.0;
 	} else {
 		mypcart->myPhysics->given_control_force_u_alt_secondary_source = 0.0;
-	}
+	}*/
 }
 
 
@@ -380,7 +402,7 @@ if(text_buffer != nullptr)
 	else if(line_n == 3 && useWebcamForVision) {
 			cv::Mat latest_EKF_state;
 			latest_EKF_state = my_kalman_filter.GetLatestState();
-			sprintf____s(text_buffer, "Kalman (theta, omega, x, xdot, LQR_PWMDELT): (%5.3f, %5.3f, %5.3f, %5.3f, %1.2f)", latest_EKF_state.ST_theta, latest_EKF_state.ST_omega, latest_EKF_state.ST_cartx, latest_EKF_state.ST_cartx_dot, latest_LQR_control_PWM);
+			sprintf____s(text_buffer, "Kalman (theta, omega, x, xdot, LQR_PWMDELT): (%5.3f, %5.3f, %5.3f, %5.3f, %1.2f)", latest_EKF_state.ST_theta, latest_EKF_state.ST_omega, latest_EKF_state.ST_cartx, latest_EKF_state.ST_cartx_dot, last_LQR_control_PWM);
 			return true;
 	}
 	else {return false;}
@@ -390,48 +412,21 @@ if(text_buffer != nullptr)
 }
 
 
-static void DrawKalmanCart(cv::Mat givenState, double cartwidth, double cartheight, double boblength, double bobdiam, unsigned char R, unsigned char G, unsigned char B)
-{
-	phys::point center, pendbobpos;
-	
-	center.x = givenState.ST_cartx;
-	center.y = 0.0;
-	pendbobpos.x = center.x + (boblength * cos(physmath::ONE_HALF_PI - givenState.ST_theta));
-	pendbobpos.y = center.y + (boblength * sin(physmath::ONE_HALF_PI - givenState.ST_theta));
-	
-	glBegin(GL_LINES);
-	glColor3ub(R,G,B);
-	//pendulum
-	phys::drawing::GLVERT2(center);
-	phys::drawing::GLVERT2(pendbobpos);
-
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*0.5, cartheight*0.5));
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*(-0.5), cartheight*0.5));
-
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*(-0.5), cartheight*0.5));
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*(-0.5), cartheight*(-0.5)));
-
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*(-0.5), cartheight*(-0.5)));
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*0.5, cartheight*(-0.5)));
-
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*0.5, cartheight*(-0.5)));
-	phys::drawing::GLVERT2(center + phys::point(cartwidth*0.5, cartheight*0.5));
-	glEnd();
-	
-	glBegin(GL_LINE_STRIP);
-	glColor3ub(R,G,B);
-	phys::drawing::GLCIRCLE2D(pendbobpos, bobdiam*0.5, 12);
-	glEnd();
-}
-
 
 void Simulation_FinalDCM2ArduinoKalmanCV::DrawSystemStuff()
 {
+	uint8_t rcolor = 220;
+	uint8_t gcolor = 220;
+	uint8_t bcolor = 220;
 	if(LQR_control_enabled_overriding_joystick) {
-		glColor3ub(220,10,10);
-	} else {
-		glColor3ub(220,220,220);
+		bcolor = gcolor = 10;
 	}
+	if(isRecording) {
+		rcolor = 10;
+		gcolor = 220;
+	}
+	glColor3ub(rcolor,gcolor,bcolor);
+	
 	
 	double outer_bound_height = 0.50;
 	double inner_bound_height = 0.15;
@@ -473,6 +468,7 @@ void Simulation_FinalDCM2ArduinoKalmanCV::DrawSystemStuff()
 													mypcart->myPhysics->l, mypcart->myPhysics->drawn_bob_diameter, 200, 140, 10);
 	}
 }
+
 
 
 

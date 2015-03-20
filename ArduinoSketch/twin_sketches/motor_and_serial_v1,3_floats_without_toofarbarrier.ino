@@ -35,11 +35,8 @@
 */
 
 // Initialize the motor on the shield's DC-motor-3 attachment
-AF_DCMotor mymotor(3, MOTOR34_64KHZ);
+AF_DCMotor mymotor(3, MOTOR34_8KHZ);
 
-// Pins for reading from encoder processor
-#define TooFarRightPin  2
-#define TooFarLLeftPin  13
 
 /*==========================================================================================
   DYNAMIC VARIABLES (NOT USER SETTINGS)
@@ -60,14 +57,31 @@ void setup()
   Serial.begin(19200);
   mymotor.run(RELEASE);
   LastSetMotorSpeed = 0;
-  
-  pinMode(TooFarRightPin, INPUT);
-  pinMode(TooFarLLeftPin, INPUT);
 }
 
+/*==========================================================================================
+  MOTOR SPEED ADJUSTMENT
+*/
+#define Ptr1 0.45f
+#define Ptr2 0.70f
+#define Ptr3 1.00f
 
-int tooFarRightRecentMeasurement = 0;
-int tooFarLLeftRecentMeasurement = 0;
+#define Pas1 0.0f
+#define Pas2 0.53922f
+#define Pas3 1.0f
+
+int GetAdjustedMotorSpeedMagnitude(int desiredMotorSpeed)
+{
+	float adjSpd = ((float)NewMotorSpeed) / 254.0f;
+	
+	if(adjSpd < Pas2) {
+		adjSpd = Ptr1 + ((adjSpd-Pas1)/(Pas2-Pas1))*(Ptr2-Ptr1);
+	} else {
+		adjSpd = Ptr2 + ((adjSpd-Pas2)/(Pas3-Pas2))*(Ptr3-Ptr2);
+	}
+	
+	return ((int)(adjSpd*254.0f));
+}
 
 
 /*==========================================================================================
@@ -75,9 +89,6 @@ int tooFarLLeftRecentMeasurement = 0;
 */
 void loop()
 {
-  tooFarRightRecentMeasurement = digitalRead(TooFarRightPin);
-  tooFarLLeftRecentMeasurement = digitalRead(TooFarLLeftPin);
-  
   //----------------------------
   // Receive motor inputs and drive results
   //
@@ -93,14 +104,6 @@ void loop()
       NewMotorSpeed = (SerialLastReadVal-127)*(-2);
     }
     
-    //refuse movements that would cause the cart to slam into the sides
-    if(NewMotorSpeed < 0 && tooFarRightRecentMeasurement != LOW) {
-      NewMotorSpeed = 0;
-    }
-    if(NewMotorSpeed > 0 && tooFarLLeftRecentMeasurement != LOW) {
-      NewMotorSpeed = 0;
-    }
-    
     //check if the motor speed is different than what the motor already is
     if(NewMotorSpeed != LastSetMotorSpeed)
     {
@@ -108,19 +111,17 @@ void loop()
       //now actually set the motor speed -- the sign (+/-) indicates direction
       if(NewMotorSpeed > 0) {
         mymotor.run(FORWARD);
-        mymotor.setSpeed(NewMotorSpeed);
+        mymotor.setSpeed(GetAdjustedMotorSpeedMagnitude(NewMotorSpeed));
       }
       else if(NewMotorSpeed < 0) {
-        NewMotorSpeed = abs(NewMotorSpeed);
+	NewMotorSpeed = abs(NewMotorSpeed);
         mymotor.run(BACKWARD);
-        mymotor.setSpeed(NewMotorSpeed);
+        mymotor.setSpeed(GetAdjustedMotorSpeedMagnitude(NewMotorSpeed));
       } else {
         mymotor.run(RELEASE);
       }
     }
   }
-  
-  //delay(1); //since we are using timed interrupt for linear encoder reading, we can comfortably wait here
 }
 
 

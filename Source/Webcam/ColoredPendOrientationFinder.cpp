@@ -52,7 +52,7 @@ CV_PendCart_Raw_Measurement * ColoredPendOrientationFinder::ProcessImageToMeasur
 
 void ColoredPendOrientationFinder::CalibratePendulumFinder()
 {
-	cv::Mat latestImg, blurredImg, processedImg;
+	cv::Mat latestImg, blurredImg, processedImg, pendBinary222;
 	
 	std::string winNameStr("calibration");
 	cv::namedWindow(winNameStr, cv::WINDOW_AUTOSIZE);
@@ -107,7 +107,8 @@ void ColoredPendOrientationFinder::CalibratePendulumFinder()
 			
 			cv::imshow("blurred", blurredImg);
 			cv::imshow("latest", latestImg);
-			cv::imshow(winNameStr, pendBinary*255);
+			cv::resize(pendBinary,pendBinary222,cv::Size(0,0),2.0,2.0);
+			cv::imshow(winNameStr, pendBinary222*255);
 			cv::waitKey(3);
 			myImageProcessor.GetPendAngleFromSegmentedImg(&cartBinary, &pendBinary, true, cartx, carty, pendtheta);
 			
@@ -178,7 +179,8 @@ void ColoredPendOrientationFinder::CalibrateCartFinder()
 			myImageProcessor.DrawCartTracks(blurredImg, cartx, carty);
 			//cv::imshow("latest", latestImg);
 			cv::imshow("blurred", blurredImg);
-			cv::imshow(winNameStr, cartBinary*255);
+			cv::resize(cartBinary*255,cartBinary,cv::Size(0,0),2.0,2.0);
+			cv::imshow(winNameStr, cartBinary);
 			cv::waitKey(3);
 		}
 		

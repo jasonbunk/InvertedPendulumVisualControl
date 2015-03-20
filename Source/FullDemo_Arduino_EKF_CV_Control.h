@@ -4,6 +4,7 @@
 
 #include "SimplerGameSimSystem.h"
 #include <opencv2/opencv.hpp>
+#include "SimUtilsShared.h"
 
 #include "EstimationAndControl/Control/Controller_SavedHumanReplay.h"
 #include "EstimationAndControl/Control/Controller_Position.h"
@@ -24,6 +25,10 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	
 	double simulation_time_elapsed_mytracker;
 	
+	savedstatesfordebugging historySaved;
+	bool historyStartedRecently;
+	bool isRecording;
+	
 //--------------------------------------------------
 	double drawn_but_not_physical__cart_limits;
 	double drawn_but_not_physical__cart_limits_inner;
@@ -37,11 +42,7 @@ class Simulation_FinalDCM2ArduinoKalmanCV : public SimplerGameSimSystem
 	
 	bool LQR_control_enabled_overriding_joystick;
 	
-	char lastlast_LQR_control_counter;
-	double lastlast_LQR_control_PWM;
 	double last_LQR_control_PWM;
-	double latest_LQR_control_PWM;
-	double last_LQR_signal_actually_sent;
 	dcm2_controller_inverted_linearized_LQR   mycontroller_LQR;
 	nonlinear_swingup_optimal_controller   mycontroller_nlswing;
 	dcm2_pc_position_controller_pid   mycontroller_position;

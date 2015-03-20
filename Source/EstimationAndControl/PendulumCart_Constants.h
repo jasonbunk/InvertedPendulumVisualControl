@@ -27,6 +27,7 @@ public:
 	
 	//motor params
 	double uscalar;  //(stalltorque / motorradius) == proportionality factor scaling PWM to a force on the cart
+	double sdtau; //time constant tau of the pretend series LR circuit that models the signal delay from laptop to Arduino
 	
 	//miscellaneous (for control systems?)
 	double cart_track_limits__max_hardlimit;
@@ -42,6 +43,7 @@ public:
 		MC(0.0),
 		kc(0.0),
 		uscalar(0.0),
+		sdtau(0.0),
 		theta_measurement_noise_stddev(0.01),
 		pendulum_process_noise_accelerations_stddev(0.01),
 		omega_measurement_noise_stddev(0.01),

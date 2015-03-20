@@ -22,6 +22,7 @@
 #include "InteractiveNonconvexOptimization.h"
 #include "TestingSimulationFromVideoFile.h"
 #include "SimulationForTesting.h"
+#include "DrivenCosineOscillationTest.h"
 #include <iostream>
 using std::cout; using std::endl;
 
@@ -59,6 +60,9 @@ void StartSimulation(int argc, char** argv)
 	} else if(atoi(argv[argOff]) == 3) {
 		cout<<"starting simulation for testing (simulated pend-cart system)..."<<endl;
 		simsys = new SimulationForTesting();
+	} else if(atoi(argv[argOff]) == 4) {
+		cout<<"starting driven cosine oscillation test..."<<endl;
+		simsys = new DrivenCosineOscillationTest();
 	}
 	
 	gGameSystem.camera_rotation.Nullify();

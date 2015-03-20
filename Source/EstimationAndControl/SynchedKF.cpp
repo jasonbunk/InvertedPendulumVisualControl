@@ -51,7 +51,7 @@ void SynchedKF_PendCartDCM2::Initialize(double initial_timestamp, cv::Mat initia
 	initial_xvec.copyTo(state_history.back()->xvec);
 //----------------------------------------
 	//uncertain of initial position
-	state_history.back()->Pmat = (cv::Mat::eye(4,4,CV_64F)*10.0*pcsys.theta_measurement_noise_stddev
+	state_history.back()->Pmat = (cv::Mat::eye(ST_size_rows,ST_size_rows,CV_64F)*10.0*pcsys.theta_measurement_noise_stddev
 									*10.0*pcsys.cart_x_measurement_noise_stddev);
 	
 	SubclassInitialize();
@@ -165,14 +165,14 @@ void SynchedKF_General::CheckForMeasurementsAtTime(double timestamp,
 							double *& possibly_returned_controlforce)
 {
 	for(int ii=0; ii<measurements_history.size(); ii++) {
-		if(measurements_history[ii].timestamp - timestamp < (fixed_time_step*0.50001) && measurements_history[ii].I_was_simulated==false) {
+		if(fabs(measurements_history[ii].timestamp - timestamp < (fixed_time_step*0.50001)) && measurements_history[ii].I_was_simulated==false) {
 			measurements_history[ii].I_was_simulated = true;
 			possibly_returned_measurement = &(measurements_history[ii]);
 			break;
 		}
 	}
 	for(int ii=0; ii<controlforce_history.size(); ii++) {
-		if(controlforce_history[ii].timestamp - timestamp < (fixed_time_step*0.50001) && controlforce_history[ii].I_was_simulated==false) {
+		if(fabs(controlforce_history[ii].timestamp - timestamp < (fixed_time_step*0.50001)) && controlforce_history[ii].I_was_simulated==false) {
 			controlforce_history[ii].I_was_simulated = true;
 			possibly_returned_controlforce = &(controlforce_history[ii].data);
 			break;
@@ -225,7 +225,7 @@ void SynchedKF_General::UpdateToTime(double given_current_time)
 		std::cout<<"starting fresh, new measurement received after a timeout"<<std::endl;
 		KeepHistoryUpToThisTime(given_current_time - latest_kalman_time); //erase most but latest time(s)
 		state_history.back()->timestamp = latest_kalman_time = (given_current_time - length_of_time_of_history_to_save);
-		state_history.back()->Pmat = cv::Mat::eye(4,4,CV_64F) * 1.0;
+		state_history.back()->Pmat = cv::Mat::eye(ST_size_rows,ST_size_rows,CV_64F) * 1.0;
 	}
 	
 //==========================================================================

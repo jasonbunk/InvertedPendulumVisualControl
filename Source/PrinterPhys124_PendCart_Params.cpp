@@ -21,32 +21,34 @@
 #include <iostream>
 using std::cout; using std::endl;
 
-static const double TRACKS_LIMITS_TRUE_MAX_BOUNDS = 0.5 * 0.35;
-static const double TRACKS_LIMITS_INNER_SOFT_BOUNDS = (TRACKS_LIMITS_TRUE_MAX_BOUNDS - 0.036);
-static const double TRACK_LIMITS_SIM_BOUNDS = 1000.0;
+/*extern*/ double PRINTER_LINEAR_WIDTH_X = 0.5 * 0.31;
 
-/*extern*/ double PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS_MODERATE = (TRACKS_LIMITS_TRUE_MAX_BOUNDS - 0.02);
-/*extern*/ double PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS = TRACKS_LIMITS_INNER_SOFT_BOUNDS;
-/*extern*/ double PRINTER_LINEAR_WIDTH_X = TRACKS_LIMITS_TRUE_MAX_BOUNDS;
+/*extern*/ double PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS = (PRINTER_LINEAR_WIDTH_X * 0.9);
 /*extern*/ double PRINTER_EXPECTED_MAX_OMEGA = 15.0;
 /*extern*/ double PRINTER_EXPECTED_MAX_VELOCITY = 1.3;
 
 
-/*extern*/ double WEBCAM_IMG_GRAB_TIME = 0.05; //fixed estimated webcam delay, not including computer vision image processing
-/*extern*/ double CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL = 0.015; //estimated delay for the Arduino to enact a change in control
-
-/*extern*/ double PRINTER_CONTROL_SCALAR_U = 7.0; //experimental estimate at 10 volts
+static const double CART_FRICTION_KC = 7.1;
+/*extern*/ double PRINTER_CONTROL_SCALAR_U = 6.5; //experimental estimate at 10 volts
 												//is about 7.0 at 12 volts
 
-static const double PENDLEN = 15.0 * 0.01;
-static const double PENDWID = 2.69875 * 0.01;
-static const double PENDMASS= 2.678*(PENDLEN*PENDWID); //proportional to area
+/*extern*/ double WEBCAM_IMG_GRAB_TIME = 0.05; //fixed estimated webcam delay, not including computer vision image processing
 
-static const double MASS_OF_INK_CARTRIDGE_AND_BOLT = 0.060;
-static const double CARTMASS = 0.074 + MASS_OF_INK_CARTRIDGE_AND_BOLT + 0.0037;
+/*extern*/ double CONTROL_DELAY_ARDUINO_SERIAL_SIGNAL = 0.02; //estimated delay for the Arduino to enact a change in control
+static const double PRINTER_SIGNAL_DELAY_TIME_CONSTANT_TAU = -0.01;
 
-static const double motorBeltDriverRadius = 0.0085;
-static const double MOTOREQUIVALENTMASS = 0.002;
+
+static const double PENDDENSITY_PER_LENGTH_IN_M = (0.03024 / 0.385); //30 grams per 38.5 centimeters
+static const double PENDLEN = 15.1 * 0.01;
+static const double PENDWID = 2.699 * 0.01;
+static const double PENDMASS= PENDDENSITY_PER_LENGTH_IN_M*(PENDLEN+0.1);
+
+
+static const double MASS_OF_INK_CARTRIDGE_AND_BOLT = (0.0602 - PENDMASS);
+static const double CARTMASS = 0.104 + MASS_OF_INK_CARTRIDGE_AND_BOLT;
+
+static const double drawnMotorBeltDriverRadius = 0.0085;
+static const double BELTEQUIVALENTMASS = 0.004;
 
 
 
@@ -58,7 +60,7 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
 	// NOTE: power the printer motor with AT LEAST 12 volts supply
     
     consts.uscalar = PRINTER_CONTROL_SCALAR_U;
-    
+    consts.sdtau = PRINTER_SIGNAL_DELAY_TIME_CONSTANT_TAU;
     consts.g = 9.81;
     
 //----------------------------------------
@@ -69,31 +71,43 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
     consts.l = (0.5 * PENDLEN);
     
     cout<<"PENDULUM IS MODELED AS A RECTANGLE WITH DIMENSIONS: "<<(PENDLEN*100.0)<<"x"<<(PENDWID*100.0)<<" (cm) with mass: "<<(PENDMASS*1000.0)<<" grams"<<endl;
+    cout<<"L^2*m == "<<(consts.l*consts.l*consts.m)<<endl;
+    cout<<"Ipc == "<<consts.Ipc<<endl;
 //----------------------------------------
     
     consts.kp = frictionless ? 0.0 : 0.0012;
     
-    consts.MC = (CARTMASS + MOTOREQUIVALENTMASS);
-    consts.kc = frictionless ? 0.0 : 7.0;
+    consts.MC = (CARTMASS + BELTEQUIVALENTMASS);
+    consts.kc = frictionless ? 0.0 : CART_FRICTION_KC;
     
-    consts.cart_track_limits__max_hardlimit = TRACKS_LIMITS_TRUE_MAX_BOUNDS; //for control systems
-    consts.cart_track_limits__inner_limit = TRACKS_LIMITS_INNER_SOFT_BOUNDS;
+    consts.cart_track_limits__max_hardlimit = PRINTER_LINEAR_WIDTH_X; //for control systems
+    consts.cart_track_limits__inner_limit = PRINTER_LINEAR_WIDTH_X_SOFT_BOUNDS;
     
-    consts.max_displacement_of_cart_around_COMom_while_pend_swings = 0.036;
-	cout<<"todo: more accurately calculate \"max_displacement_of_cart_around_COMom_while_pend_swings\" ?"<<endl;
+    consts.max_displacement_of_cart_around_COMom_while_pend_swings = 0.032;
+	//cout<<"todo: more accurately calculate \"max_displacement_of_cart_around_COMom_while_pend_swings\" ?"<<endl;
 	//cout<<"        this is used for position controllers (how close to the sides should it be allowed)"<<endl;
     
+    cout<<"Mcart == "<<consts.MC<<" kilograms"<<endl;
 //--------------------------------------------
 // Noise estimates
 
-	consts.theta_measurement_noise_stddev = 0.006;
-	consts.cart_x_measurement_noise_stddev = 0.001;
+/*	consts.theta_measurement_noise_stddev = 0.016;
+	consts.cart_x_measurement_noise_stddev = 0.0011;
 	
-	consts.omega_measurement_noise_stddev = 0.024;
-	consts.cart_vel_measurement_noise_stddev = 0.004;
+	consts.omega_measurement_noise_stddev = 0.25;
+	consts.cart_vel_measurement_noise_stddev = 0.039;
 	
 	consts.pendulum_process_noise_accelerations_stddev = 0.5;
-	consts.cart_x_process_noise_accelerations_stddev = 2.05;
+	consts.cart_x_process_noise_accelerations_stddev = 0.005;*/
+	
+	consts.theta_measurement_noise_stddev = 0.016;
+	consts.cart_x_measurement_noise_stddev = 0.0011;
+	
+	consts.omega_measurement_noise_stddev = 0.25;
+	consts.cart_vel_measurement_noise_stddev = 0.039;
+	
+	consts.pendulum_process_noise_accelerations_stddev = 0.5;
+	consts.cart_x_process_noise_accelerations_stddev = 0.5;
 	
 //--------------------------------------------
     
@@ -103,27 +117,7 @@ PendulumCartDCM2_Constants  GetPhysicalPrinterSystemConstants(bool frictionless 
 
 void InitializeJPhysicsInstance(phys::dcmotor_pendcart * instance, bool frictionless /*= false*/)
 {
-	PendulumCartDCM2_Constants consts = GetPhysicalPrinterSystemConstants(frictionless);
-	
-    instance->cart_kvel = consts.kc;
-    instance->pendulum_kang = consts.kp;
-   
-    instance->drawn_bob_diameter = 0.04;
-    instance->drawn_cart_height = 0.06;
-    instance->drawn_cart_width = 0.078;
-    instance->cart_mass = CARTMASS;
-	
-	instance->pendulum_length_center_of_mass = consts.l;
-	instance->pendulum_mass = consts.m;
-	instance->pendulum_I_about_CM = consts.Ipc;
-	
-	instance->cart_bounds_plusminus_x = TRACK_LIMITS_SIM_BOUNDS;
-	
-	instance->drawn_motor_position = -1.0 * fabs(instance->cart_bounds_plusminus_x);
-	instance->given_pwm_delta = 0.0;
-	instance->motorBeltDriverRadius = motorBeltDriverRadius;
-	instance->Imot = MOTOREQUIVALENTMASS * motorBeltDriverRadius * motorBeltDriverRadius;
-	instance->stalltorque = consts.uscalar * motorBeltDriverRadius;
+	cout<<"~~~~~~~~~~~~~~~~~~~~~ WARNING: phys::dcmotor_pendcart no longer supported"<<endl;
 }
 
 
@@ -144,12 +138,13 @@ void InitializeJPhysicsInstance(phys::dcmotor22_pendcart * instance, bool fricti
     instance->myPhysics->kc = consts.kc;
     
     instance->myPhysics->g = 9.81;
+	instance->myPhysics->sdtau = consts.sdtau;
 	
-	instance->myPhysics->cart_bounds_plusminus_x = TRACK_LIMITS_SIM_BOUNDS;
+	instance->myPhysics->cart_bounds_plusminus_x = PRINTER_LINEAR_WIDTH_X;
 	
 	instance->myPhysics->drawn_motor_position = -1.0 * fabs(instance->myPhysics->cart_bounds_plusminus_x);
 	instance->myPhysics->given_control_force_u = 0.0;
-	instance->myPhysics->drawn_motorBeltDriverRadius = motorBeltDriverRadius;
+	instance->myPhysics->drawn_motorBeltDriverRadius = drawnMotorBeltDriverRadius;
 }
 
 
@@ -170,12 +165,13 @@ void InitializeJPhysicsInstance(phys::iphys_dcmotor22_pendcart * instance, bool 
     instance->kc = consts.kc;
     
     instance->g = 9.81;
+    instance->sdtau = consts.sdtau;
 	
-	instance->cart_bounds_plusminus_x = TRACK_LIMITS_SIM_BOUNDS;
+	instance->cart_bounds_plusminus_x = PRINTER_LINEAR_WIDTH_X;
 	
 	instance->drawn_motor_position = -1.0 * fabs(instance->cart_bounds_plusminus_x);
 	instance->given_control_force_u = 0.0;
-	instance->drawn_motorBeltDriverRadius = motorBeltDriverRadius;
+	instance->drawn_motorBeltDriverRadius = drawnMotorBeltDriverRadius;
 }
 
 
